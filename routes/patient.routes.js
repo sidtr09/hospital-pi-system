@@ -14,12 +14,11 @@ router.use(apiLimiter);
 router.use(requireAuth);
 
 // ── [ Patient Search View ] ───────────────────────────────────────────────────
-// GET /api/patients?q=<name|ref>&limit=<n>&offset=<n>
-router.get('/', (req, res, next) => {
+router.get('/', async (req, res, next) => {
   try {
     const { q = '', limit = 50, offset = 0 } = req.query;
     const term = `%${q}%`;
-    const rows = db.all(
+    const rows = await db.all(
       `SELECT id, patient_ref, full_name, date_of_birth, sex, blood_group, registered_at
        FROM patients
        WHERE full_name LIKE ? OR patient_ref LIKE ?
@@ -32,8 +31,7 @@ router.get('/', (req, res, next) => {
 });
 
 // ── [ Patient Registration Form ] — create ────────────────────────────────────
-// POST /api/patients
-router.post('/', (req, res, next) => {
+router.post('/', async (req, res, next) => {
   try {
     const { patient_ref, full_name, date_of_birth, sex,
             contact_number, address, blood_group, allergy_notes } = req.body;
@@ -42,7 +40,7 @@ router.post('/', (req, res, next) => {
       return res.status(400).json({ error: '[ Required fields missing: patient_ref, full_name, date_of_birth ]' });
     }
 
-    const result = db.run(
+    const result = await db.run(
       `INSERT INTO patients
          (patient_ref, full_name, date_of_birth, sex, contact_number, address, blood_group, allergy_notes)
        VALUES (?,?,?,?,?,?,?,?)`,
@@ -59,19 +57,19 @@ router.post('/', (req, res, next) => {
 });
 
 // GET /api/patients/:id — full record
-router.get('/:id', (req, res, next) => {
+router.get('/:id', async (req, res, next) => {
   try {
-    const patient = db.get('SELECT * FROM patients WHERE id = ?', [req.params.id]);
+    const patient = await db.get('SELECT * FROM patients WHERE id = ?', [req.params.id]);
     if (!patient) return res.status(404).json({ error: '[ Patient Not Found ]' });
     res.json(patient);
   } catch (err) { next(err); }
 });
 
 // PUT /api/patients/:id — update registration record
-router.put('/:id', (req, res, next) => {
+router.put('/:id', async (req, res, next) => {
   try {
     const { full_name, contact_number, address, blood_group, allergy_notes } = req.body;
-    const result = db.run(
+    const result = await db.run(
       `UPDATE patients
        SET full_name=?, contact_number=?, address=?, blood_group=?, allergy_notes=?,
            updated_at=strftime('%Y-%m-%dT%H:%M:%SZ','now')
@@ -84,10 +82,9 @@ router.put('/:id', (req, res, next) => {
 });
 
 // ── [ Clinical Notes Timeline ] ───────────────────────────────────────────────
-// GET /api/patients/:id/notes
-router.get('/:id/notes', (req, res, next) => {
+router.get('/:id/notes', async (req, res, next) => {
   try {
-    const notes = db.all(
+    const notes = await db.all(
       `SELECT * FROM clinical_notes WHERE patient_id=? ORDER BY created_at DESC`,
       [req.params.id]
     );
@@ -95,14 +92,13 @@ router.get('/:id/notes', (req, res, next) => {
   } catch (err) { next(err); }
 });
 
-// POST /api/patients/:id/notes
-router.post('/:id/notes', (req, res, next) => {
+router.post('/:id/notes', async (req, res, next) => {
   try {
     const { authored_by, note_type, body } = req.body;
     if (!authored_by || !note_type || !body) {
       return res.status(400).json({ error: '[ Required fields missing: authored_by, note_type, body ]' });
     }
-    const result = db.run(
+    const result = await db.run(
       `INSERT INTO clinical_notes (patient_id, authored_by, note_type, body) VALUES (?,?,?,?)`,
       [req.params.id, authored_by, note_type, body]
     );

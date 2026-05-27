@@ -14,8 +14,7 @@ router.use(apiLimiter);
 router.use(requireAuth);
 
 // ── [ Stock Ledger View ] — full inventory list ───────────────────────────────
-// GET /api/inventory?category=<cat>&limit=<n>&offset=<n>
-router.get('/', (req, res, next) => {
+router.get('/', async (req, res, next) => {
   try {
     const { category, limit = 100, offset = 0 } = req.query;
     let sql = `SELECT * FROM inventory_items`;
@@ -28,15 +27,14 @@ router.get('/', (req, res, next) => {
     sql += ` ORDER BY item_name ASC LIMIT ? OFFSET ?`;
     params.push(Number(limit), Number(offset));
 
-    res.json({ data: db.all(sql, params) });
+    res.json({ data: await db.all(sql, params) });
   } catch (err) { next(err); }
 });
 
 // ── [ Low Inventory Alert Dashboard ] ────────────────────────────────────────
-// GET /api/inventory/alerts/low-stock
-router.get('/alerts/low-stock', (req, res, next) => {
+router.get('/alerts/low-stock', async (req, res, next) => {
   try {
-    const items = db.all(
+    const items = await db.all(
       `SELECT id, item_code, item_name, category, unit,
               quantity_on_hand, reorder_threshold, location, expiry_date
        FROM inventory_items
@@ -48,10 +46,10 @@ router.get('/alerts/low-stock', (req, res, next) => {
 });
 
 // GET /api/inventory/alerts/expiring?days=<n>
-router.get('/alerts/expiring', (req, res, next) => {
+router.get('/alerts/expiring', async (req, res, next) => {
   try {
     const days = Math.max(1, parseInt(req.query.days || '30', 10));
-    const items = db.all(
+    const items = await db.all(
       `SELECT * FROM inventory_items
        WHERE expiry_date IS NOT NULL
          AND expiry_date <= date('now', ? || ' days')
@@ -64,7 +62,7 @@ router.get('/alerts/expiring', (req, res, next) => {
 });
 
 // POST /api/inventory — add new item to [ Stock Ledger View ]
-router.post('/', (req, res, next) => {
+router.post('/', async (req, res, next) => {
   try {
     const { item_code, item_name, category, unit,
             quantity_on_hand, reorder_threshold, location, expiry_date } = req.body;
@@ -73,7 +71,7 @@ router.post('/', (req, res, next) => {
       return res.status(400).json({ error: '[ Required: item_code, item_name, category, unit ]' });
     }
 
-    const result = db.run(
+    const result = await db.run(
       `INSERT INTO inventory_items
          (item_code, item_name, category, unit, quantity_on_hand, reorder_threshold, location, expiry_date)
        VALUES (?,?,?,?,?,?,?,?)`,
@@ -90,8 +88,7 @@ router.post('/', (req, res, next) => {
 });
 
 // ── [ Stock Ledger View ] — record a transaction (dispense / restock) ─────────
-// POST /api/inventory/:id/transactions
-router.post('/:id/transactions', (req, res, next) => {
+router.post('/:id/transactions', async (req, res, next) => {
   try {
     const { txn_type, quantity_delta, performed_by, notes } = req.body;
 
@@ -99,13 +96,13 @@ router.post('/:id/transactions', (req, res, next) => {
       return res.status(400).json({ error: '[ Required: txn_type, quantity_delta, performed_by ]' });
     }
 
-    const updated = db.transaction(() => {
-      db.run(
+    const updated = await db.transaction(async () => {
+      await db.run(
         `INSERT INTO inventory_transactions (item_id, txn_type, quantity_delta, performed_by, notes)
          VALUES (?,?,?,?,?)`,
         [req.params.id, txn_type, quantity_delta, performed_by, notes]
       );
-      const result = db.run(
+      const result = await db.run(
         `UPDATE inventory_items
          SET quantity_on_hand = quantity_on_hand + ?,
              updated_at = strftime('%Y-%m-%dT%H:%M:%SZ','now')
@@ -121,9 +118,9 @@ router.post('/:id/transactions', (req, res, next) => {
 });
 
 // GET /api/inventory/:id/transactions — full ledger for one item
-router.get('/:id/transactions', (req, res, next) => {
+router.get('/:id/transactions', async (req, res, next) => {
   try {
-    const rows = db.all(
+    const rows = await db.all(
       `SELECT * FROM inventory_transactions WHERE item_id=? ORDER BY created_at DESC LIMIT 200`,
       [req.params.id]
     );

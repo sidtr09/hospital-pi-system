@@ -1,38 +1,41 @@
-/**
- * Core Database Interface Layer — node:sqlite (built-in, no compilation needed)
- * Synchronous API identical in shape to better-sqlite3 — zero external dependency.
- */
-
 'use strict';
 
-const { DatabaseSync } = require('node:sqlite');
-const path     = require('path');
-const fs       = require('fs');
+const sqlite3   = require('sqlite3').verbose();
+const path      = require('path');
+const fs        = require('fs');
 const appConfig = require('../config/app.config');
 
 let _db = null;
 
+const runAsync = (db, sql, params = []) => new Promise((res, rej) =>
+  db.run(sql, params, function (err) {
+    err ? rej(err) : res({ changes: this.changes, lastInsertRowid: this.lastID });
+  })
+);
+const allAsync = (db, sql, params = []) => new Promise((res, rej) =>
+  db.all(sql, params, (err, rows) => err ? rej(err) : res(rows))
+);
+const getAsync = (db, sql, params = []) => new Promise((res, rej) =>
+  db.get(sql, params, (err, row) => err ? rej(err) : res(row))
+);
+
 function applyPragmas(db, pragmas) {
-  for (const [key, value] of Object.entries(pragmas)) {
-    db.exec(`PRAGMA ${key} = ${value};`);
-  }
+  db.serialize(() => {
+    for (const [key, value] of Object.entries(pragmas)) {
+      db.run(`PRAGMA ${key} = ${value}`);
+    }
+  });
 }
 
 function loadSchema(db) {
   const schemaPath = path.join(__dirname, 'schema.sql');
-  if (!fs.existsSync(schemaPath)) {
-    console.warn('[DB] schema.sql not found — skipping schema initialization');
-    return;
-  }
+  if (!fs.existsSync(schemaPath)) return Promise.resolve();
   const sql = fs.readFileSync(schemaPath, 'utf8');
-  db.exec(sql);
-  console.log('[DB] Schema applied successfully');
+  return new Promise((res, rej) => db.exec(sql, err => err ? rej(err) : res()));
 }
 
 const db = {
-  isOpen() {
-    return _db !== null;
-  },
+  isOpen() { return _db !== null; },
 
   async initialize() {
     if (_db) return _db;
@@ -40,44 +43,34 @@ const db = {
     const dir = path.dirname(appConfig.dbPath);
     if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
 
-    _db = new DatabaseSync(appConfig.dbPath);
+    await new Promise((res, rej) => {
+      _db = new sqlite3.Database(appConfig.dbPath, err => err ? rej(err) : res());
+    });
 
     applyPragmas(_db, appConfig.dbPragmas);
-    loadSchema(_db);
+    await loadSchema(_db);
+    console.log('[DB] Schema applied successfully');
 
-    process.on('exit', () => { try { _db?.close(); } catch {} });
-    process.on('SIGINT', () => process.exit(0));
+    process.on('exit',    () => { try { _db?.close(); } catch {} });
+    process.on('SIGINT',  () => process.exit(0));
     process.on('SIGTERM', () => process.exit(0));
 
     console.log(`[DB] Connected: ${appConfig.dbPath}`);
     return _db;
   },
 
-  get instance() {
-    if (!_db) throw new Error('[DB] Database not initialized. Call db.initialize() first.');
-    return _db;
-  },
+  all(sql, params = [])  { return allAsync(_db, sql, params); },
+  get(sql, params = [])  { return getAsync(_db, sql, params); },
+  run(sql, params = [])  { return runAsync(_db, sql, params); },
 
-  all(sql, params = []) {
-    return this.instance.prepare(sql).all(...params);
-  },
-
-  get(sql, params = []) {
-    return this.instance.prepare(sql).get(...params);
-  },
-
-  run(sql, params = []) {
-    return this.instance.prepare(sql).run(...params);
-  },
-
-  transaction(fn) {
-    this.instance.exec('BEGIN');
+  async transaction(fn) {
+    await runAsync(_db, 'BEGIN');
     try {
-      const result = fn();
-      this.instance.exec('COMMIT');
+      const result = await fn();
+      await runAsync(_db, 'COMMIT');
       return result;
     } catch (err) {
-      this.instance.exec('ROLLBACK');
+      await runAsync(_db, 'ROLLBACK');
       throw err;
     }
   },
