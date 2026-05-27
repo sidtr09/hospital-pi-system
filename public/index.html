@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>[ Website Name ] — Hospital Management System</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+
+<!-- ══════════════════════════════════════════════════════════════════ -->
+<!--  LOGIN SCREEN                                                       -->
+<!-- ══════════════════════════════════════════════════════════════════ -->
+<div id="login-screen">
+  <div class="login-card">
+    <div class="logo">🏥</div>
+    <h1>[ Website Name ]</h1>
+    <p>Hospital Management System — LAN Edition</p>
+
+    <label for="username">Username</label>
+    <input id="username" type="text" placeholder="Enter username" autocomplete="off">
+
+    <label for="password">Password</label>
+    <input id="password" type="password" placeholder="Enter password">
+
+    <button class="btn-primary" id="login-btn">Sign In</button>
+    <div class="login-error" id="login-error"></div>
+
+    <div class="demo-hint">
+      <strong>Demo Credentials</strong>
+      admin / admin123 &nbsp;·&nbsp; doctor / doctor123 &nbsp;·&nbsp; nurse / nurse123
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════════════ -->
+<!--  APP SHELL                                                          -->
+<!-- ══════════════════════════════════════════════════════════════════ -->
+<div id="app">
+
+  <!-- [ Navigation Bar Component ] -->
+  <nav class="navbar">
+    <div class="navbar-brand">
+      <span class="icon">🏥</span>
+      [ Website Name ] — Hospital Management System
+    </div>
+    <div class="navbar-right">
+      <span class="server-time" id="clock"></span>
+      <span class="user-badge" id="user-badge">—</span>
+      <button class="btn-logout" id="logout-btn">Sign Out</button>
+    </div>
+  </nav>
+
+  <!-- Sidebar navigation -->
+  <aside class="sidebar">
+    <div class="nav-section">Overview</div>
+    <div class="nav-item active" data-page="dashboard">
+      <span class="icon">📊</span> Dashboard
+    </div>
+
+    <div class="nav-section">[ Patient Intake & Records Module ]</div>
+    <div class="nav-item" data-page="patient-search">
+      <span class="icon">🔍</span> [ Patient Search View ]
+    </div>
+    <div class="nav-item" data-page="patient-register">
+      <span class="icon">➕</span> [ Patient Registration Form ]
+    </div>
+
+    <div class="nav-section">[ Inventory & Pharmacy Module ]</div>
+    <div class="nav-item" data-page="stock-ledger">
+      <span class="icon">📦</span> [ Stock Ledger View ]
+    </div>
+    <div class="nav-item" data-page="low-stock">
+      <span class="icon">⚠️</span> [ Low Inventory Alert Dashboard ]
+    </div>
+
+    <div class="nav-section">[ Clinical Queue & Scheduling Module ]</div>
+    <div class="nav-item" data-page="triage-queue">
+      <span class="icon">🚑</span> [ Triage Priority Queue ]
+    </div>
+    <div class="nav-item" data-page="staff-roster">
+      <span class="icon">👥</span> [ Staff Duty Roster ]
+    </div>
+
+    <div class="nav-section">[ Offline Documentation Module ]</div>
+    <div class="nav-item" data-page="doc-library">
+      <span class="icon">📚</span> [ Document Library Browser ]
+    </div>
+  </aside>
+
+  <!-- Main content area -->
+  <main class="main" id="main-content"></main>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════════════ -->
+<!--  MODAL (shared, content injected by JS)                            -->
+<!-- ══════════════════════════════════════════════════════════════════ -->
+<div class="modal-overlay" id="modal-overlay">
+  <div class="modal">
+    <div class="modal-header">
+      <h3 id="modal-title">—</h3>
+      <button class="modal-close" id="modal-close">✕</button>
+    </div>
+    <div class="modal-body" id="modal-body"></div>
+  </div>
+</div>
+
+<script src="/js/app.js"></script>
+</body>
+</html>

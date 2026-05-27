@@ -1,0 +1,8 @@
+node_modules/
+database/hospital.db
+database/hospital.db-shm
+database/hospital.db-wal
+backup/hospital_backup_*.db
+logs/
+.env
+.DS_Store

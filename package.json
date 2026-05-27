@@ -1,0 +1,24 @@
+{
+  "name": "hospital-pi-system",
+  "version": "1.0.0",
+  "description": "[ Website Name ] — LAN Hospital Management Platform for Raspberry Pi 3B+",
+  "main": "server.js",
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "scripts": {
+    "start":  "NODE_ENV=production node server.js",
+    "dev":    "NODE_ENV=development node --watch server.js",
+    "backup": "bash backup/backup.sh"
+  },
+  "dependencies": {
+    "compression":        "^1.7.4",
+    "express":            "^4.19.2",
+    "express-rate-limit": "^7.2.0",
+    "express-session":    "^1.18.0",
+    "helmet":             "^7.1.0",
+    "morgan":             "^1.10.0",
+    "rotating-file-stream": "^3.2.3"
+  },
+  "devDependencies": {}
+}
