@@ -175,6 +175,70 @@ window.rejectUser = async (id, name) => {
   } catch (err) { toast(err.message, 'error'); }
 };
 
+/* ─── Tasks band: small summary cards at top of dashboard ──── */
+async function renderTasksBand(elId) {
+  const el = $(elId);
+  if (!el) return;
+  const tiles = [];
+  try {
+    const calls = [api('GET', '/queue?status=waiting').catch(() => ({ data: [] }))];
+    if (currentRole === 'Administrator') {
+      calls.push(api('GET', '/auth/pending').catch(() => ({ data: [], count: 0 })));
+      calls.push(api('GET', '/inventory/alerts/low-stock').catch(() => ({ data: [], alert_count: 0 })));
+    }
+    const results = await Promise.all(calls);
+    const queue = results[0].data || [];
+    const critical = queue.filter(r => r.triage_level <= 2).length;
+    if (critical > 0) {
+      tiles.push({
+        tone: 'red', icon: 'ambulance', num: critical,
+        ttl: 'Critical Triage', mt: 'T1 or T2 cases waiting',
+        page: 'triage-queue',
+      });
+    }
+    if (currentRole === 'Doctor') {
+      const mine = queue.filter(r => r.assigned_to === currentUser).length;
+      if (mine > 0) {
+        tiles.push({
+          tone: 'blue', icon: 'user', num: mine,
+          ttl: 'Assigned to You', mt: 'Active cases',
+          page: 'triage-queue',
+        });
+      }
+    }
+    if (currentRole === 'Administrator') {
+      const pendingCount = results[1].count ?? 0;
+      if (pendingCount > 0) {
+        tiles.push({
+          tone: 'orange', icon: 'userPlus', num: pendingCount,
+          ttl: 'Account Approvals', mt: 'Awaiting review',
+          page: 'dashboard',
+        });
+      }
+      const lowCount = results[2].alert_count ?? 0;
+      if (lowCount > 0) {
+        tiles.push({
+          tone: 'orange', icon: 'alert', num: lowCount,
+          ttl: 'Low Stock', mt: 'Items below threshold',
+          page: 'low-stock',
+        });
+      }
+    }
+  } catch { /* silent */ }
+
+  if (!tiles.length) { el.style.display = 'none'; return; }
+  el.style.display = '';
+  el.innerHTML = tiles.map(t => `
+    <div class="task-card tone-${t.tone}" data-page="${t.page}" onclick="onNotifClick(this)">
+      <div class="ico-wrap">${icon(t.icon, 18, t.tone)}</div>
+      <div>
+        <div class="ttl">${escapeHtml(t.ttl)}</div>
+        <div class="mt">${escapeHtml(t.mt)}</div>
+      </div>
+      <div class="num">${t.num}</div>
+    </div>`).join('');
+}
+
 function areaChart(values, opts = {}) {
   const W = opts.width  || 720;
   const H = opts.height || 200;
@@ -404,6 +468,7 @@ async function tryLogin() {
     $('app').style.display = 'block';
     startClock();
     setupGlobalSearch();
+    setupNotifications();
     navigate('dashboard');
     toast(`Welcome back, ${name.split(' ')[0]}`, 'success');
   } catch (err) {
@@ -455,6 +520,7 @@ $('logout-btn').onclick = async () => {
   await api('POST', '/auth/logout');
   document.body.className = '';
   currentRole = null; currentUser = null;
+  clearNotifications();
   $('app').style.display = 'none';
   $('login-screen').style.display = 'flex';
   showAuthCard('login');
@@ -482,6 +548,157 @@ function setupGlobalSearch() {
 }
 
 /* ════════════════════════════════════════════════════════════════
+   NOTIFICATIONS — bell button + dropdown panel + auto refresh
+════════════════════════════════════════════════════════════════ */
+let _notifTimer = null;
+let _notifItems = [];
+
+function setupNotifications() {
+  const wrap = $('notif-wrap');
+  if (!wrap) return;
+  const allowed = currentRole === 'Administrator' || currentRole === 'Doctor';
+  wrap.style.display = allowed ? '' : 'none';
+  if (!allowed) return;
+
+  $('notif-btn').onclick = (e) => {
+    e.stopPropagation();
+    const panel = $('notif-panel');
+    panel.style.display = panel.style.display === 'block' ? 'none' : 'block';
+  };
+  document.addEventListener('click', (e) => {
+    const p = $('notif-panel');
+    if (!p || p.style.display !== 'block') return;
+    if (!wrap.contains(e.target)) p.style.display = 'none';
+  });
+
+  refreshNotifications();
+  if (_notifTimer) clearInterval(_notifTimer);
+  _notifTimer = setInterval(refreshNotifications, 30000);
+}
+
+function clearNotifications() {
+  if (_notifTimer) { clearInterval(_notifTimer); _notifTimer = null; }
+  _notifItems = [];
+  const wrap = $('notif-wrap'); if (wrap) wrap.style.display = 'none';
+}
+
+async function refreshNotifications() {
+  if (!(currentRole === 'Administrator' || currentRole === 'Doctor')) return;
+  try {
+    const items = await collectNotifications();
+    _notifItems = items;
+    renderNotifPanel(items);
+    updateNotifBadge(items.length);
+    // Keep the dashboard's tasks band in sync
+    if (currentPage === 'dashboard') {
+      if (currentRole === 'Administrator') renderTasksBand('ad-tasks-band');
+      else if (currentRole === 'Doctor')   renderTasksBand('dd-tasks-band');
+    }
+  } catch (err) { /* silent */ }
+}
+
+async function collectNotifications() {
+  const items = [];
+  const calls = [];
+
+  // Pending account approvals — admin only
+  if (currentRole === 'Administrator') {
+    calls.push(api('GET', '/auth/pending').then(({ data }) => {
+      (data || []).forEach(u => items.push({
+        section: 'Account Approvals',
+        ttl: `${u.full_name} wants ${u.role} access`,
+        mt:  `Submitted ${fmt(u.requested_at)}`,
+        icon: 'userPlus', tone: 'orange',
+        page: 'dashboard',
+      }));
+    }).catch(() => {}));
+  }
+
+  // Critical triage queue — admin + doctor
+  calls.push(api('GET', '/queue?status=waiting').then(({ data }) => {
+    const rows = data || [];
+    rows.filter(r => r.triage_level <= 2).forEach(r => items.push({
+      section: 'Critical Triage',
+      ttl: `T${r.triage_level} — ${r.full_name || 'Patient'}`,
+      mt:  r.chief_complaint || '',
+      icon: 'ambulance', tone: 'red',
+      page: 'triage-queue',
+    }));
+    if (currentRole === 'Doctor') {
+      rows.filter(r => r.assigned_to === currentUser).forEach(r => items.push({
+        section: 'Assigned to You',
+        ttl: `${r.full_name || 'Patient'} (T${r.triage_level})`,
+        mt:  r.chief_complaint || '',
+        icon: 'user', tone: 'blue',
+        page: 'triage-queue',
+      }));
+    }
+  }).catch(() => {}));
+
+  // Low stock — admin only
+  if (currentRole === 'Administrator') {
+    calls.push(api('GET', '/inventory/alerts/low-stock').then(({ data }) => {
+      (data || []).slice(0, 8).forEach(i => items.push({
+        section: 'Low Stock',
+        ttl: i.item_name,
+        mt:  `${i.quantity_on_hand}/${i.reorder_threshold} ${i.unit||''} · ${i.location || 'Unknown location'}`,
+        icon: 'alert', tone: 'orange',
+        page: 'low-stock',
+      }));
+    }).catch(() => {}));
+  }
+
+  await Promise.all(calls);
+  return items;
+}
+
+function updateNotifBadge(count) {
+  const badge = $('notif-badge');
+  const btn   = $('notif-btn');
+  if (!badge || !btn) return;
+  if (count > 0) {
+    badge.textContent = count > 99 ? '99+' : count;
+    badge.style.display = 'flex';
+    btn.classList.add('has-items');
+  } else {
+    badge.style.display = 'none';
+    btn.classList.remove('has-items');
+  }
+}
+
+function renderNotifPanel(items) {
+  setText('notif-summary', items.length ? `${items.length} pending` : 'All clear');
+  const list = $('notif-list');
+  if (!list) return;
+  if (!items.length) {
+    list.innerHTML = `<div class="notif-empty">${icon('checkCircle', 28, 'green')}<div style="margin-top:8px">You're all caught up</div></div>`;
+    return;
+  }
+  const grouped = {};
+  items.forEach(it => { (grouped[it.section] ||= []).push(it); });
+  list.innerHTML = Object.entries(grouped).map(([section, group]) => `
+    <div class="notif-section-head">${escapeHtml(section)} · ${group.length}</div>
+    ${group.map((it, i) => `
+      <div class="notif-item" data-page="${it.page}" onclick="onNotifClick(this)">
+        <div class="ico-wrap" style="background:#${({red:'fff5f5',orange:'fff4e6',blue:'e7f5ff',teal:'ecfdf9',violet:'f3f0ff'})[it.tone] || 'f1f3f5'}">
+          ${icon(it.icon, 16, it.tone)}
+        </div>
+        <div class="body">
+          <div class="ttl">${escapeHtml(it.ttl)}</div>
+          <div class="mt">${escapeHtml(it.mt)}</div>
+        </div>
+      </div>`).join('')}
+  `).join('');
+}
+
+window.onNotifClick = (el) => {
+  const page = el.dataset.page;
+  $('notif-panel').style.display = 'none';
+  if (page && page !== currentPage) navigate(page);
+  else if (page === currentPage && page === 'dashboard') navigate('dashboard'); // refresh
+};
+
+/* ════════════════════════════════════════════════════════════════
    DASHBOARD — routes per role
 ════════════════════════════════════════════════════════════════ */
 PAGES['dashboard'] = (el) => {
@@ -503,6 +720,18 @@ async function renderAdminDashboard(el) {
         <button class="pill-btn" onclick="navigate('dashboard')">${icon('calendar', 14)}<span>Today</span></button>
         <button class="btn btn-secondary btn-sm" onclick="navigate('dashboard')">${icon('refresh', 14)}<span>Refresh</span></button>
       </div>
+    </div>
+
+    <!-- Pending tasks band — always at the top -->
+    <div class="tasks-band" id="ad-tasks-band" style="display:none"></div>
+
+    <!-- Pending account approvals (detail card, only when items exist) -->
+    <div class="card pending-card" id="ad-pending-card" style="margin-bottom:20px;display:none">
+      <div class="card-head">
+        <h2>${icon('userPlus', 16, 'orange')}Pending Account Approvals</h2>
+        <span class="meta" id="ad-pending-count">—</span>
+      </div>
+      <div id="ad-pending-list"></div>
     </div>
 
     <!-- Polished stat tiles -->
@@ -585,20 +814,13 @@ async function renderAdminDashboard(el) {
       </div>
     </div>
 
-    <div class="card pending-card" id="ad-pending-card" style="margin-bottom:20px;display:none">
-      <div class="card-head">
-        <h2>${icon('userPlus', 16, 'orange')}Pending Account Approvals</h2>
-        <span class="meta" id="ad-pending-count">—</span>
-      </div>
-      <div id="ad-pending-list"></div>
-    </div>
-
     <div class="card">
       <div class="card-head"><h2>${icon('cpu', 16, 'teal')}System Health</h2><span class="meta">Live</span></div>
       <div class="card-body" id="ad-health">${skelLines(2)}</div>
     </div>`;
 
   loadPendingApprovals(true);
+  renderTasksBand('ad-tasks-band');
 
   const [pAll, q, ls, st, h] = await Promise.allSettled([
     api('GET', '/patients?limit=9999'),
@@ -723,6 +945,9 @@ async function renderDoctorDashboard(el) {
       </div>
     </div>
 
+    <!-- Pending tasks band — always at the top -->
+    <div class="tasks-band" id="dd-tasks-band" style="display:none"></div>
+
     <div class="stat-tiles" style="grid-template-columns:repeat(3,1fr)">
       <div class="stat-tile t-blue">
         <div class="lbl">In Queue</div>
@@ -771,6 +996,7 @@ async function renderDoctorDashboard(el) {
       </div>
     </div>`;
 
+  renderTasksBand('dd-tasks-band');
   await loadDoctorQueue();
 
   const lookup = debounce(async () => {
