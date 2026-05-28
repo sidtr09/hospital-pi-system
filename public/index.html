@@ -8,57 +8,68 @@
 </head>
 <body>
 
-<!-- ── LOGIN ─────────────────────────────────────────────────────────── -->
+<!-- ─── Login ───────────────────────────────────────────────── -->
 <div id="login-screen">
   <div class="login-card">
     <div class="login-logo">🏥</div>
     <h1>[ Website Name ]</h1>
-    <p>Hospital Management System — LAN Edition</p>
+    <p class="subtitle">Hospital Management System</p>
 
     <label for="username">Username</label>
-    <input id="username" type="text" placeholder="Enter username" autocomplete="off">
+    <input id="username" type="text" placeholder="e.g. nurse" autocomplete="off">
 
     <label for="password">Password</label>
-    <input id="password" type="password" placeholder="Enter password">
+    <input id="password" type="password" placeholder="••••••••">
 
     <button class="btn-primary" id="login-btn">Sign In</button>
     <div class="login-error" id="login-error"></div>
 
     <div class="demo-hint">
-      <strong>Demo Credentials</strong>
-      admin / admin123 &nbsp;·&nbsp; doctor / doctor123 &nbsp;·&nbsp; nurse / nurse123
+      <strong>Demo Accounts</strong>
+      <div class="creds">admin / admin123</div>
+      <div class="creds">doctor / doctor123</div>
+      <div class="creds">nurse / nurse123</div>
     </div>
   </div>
 </div>
 
-<!-- ── APP SHELL ──────────────────────────────────────────────────────── -->
+<!-- ─── App Shell ───────────────────────────────────────────── -->
 <div id="app">
 
-  <!-- [ Navigation Bar Component ] -->
   <nav class="navbar">
     <div class="navbar-brand">
-      <span class="icon">🏥</span>
+      <span class="brand-mark">🏥</span>
       [ Website Name ]
     </div>
     <div class="navbar-right">
-      <span class="server-time" id="clock"></span>
-      <span class="navbar-user" id="user-name">—</span>
-      <span class="role-pill" id="role-pill">—</span>
-      <button class="btn-logout" id="logout-btn">Sign Out</button>
+      <div class="global-search">
+        <input id="global-search-input" placeholder="Search patients…" type="text">
+        <span class="kbd">/</span>
+      </div>
+      <span class="clock" id="clock"></span>
+      <div class="user-chip">
+        <span class="avatar" id="user-avatar">A</span>
+        <div class="meta">
+          <div class="name" id="user-name">—</div>
+          <div class="role" id="user-role">—</div>
+        </div>
+      </div>
+      <button class="btn-logout" id="logout-btn">Sign out</button>
     </div>
   </nav>
 
-  <!-- Sidebar — items injected by JS based on role -->
   <aside class="sidebar" id="sidebar"></aside>
 
-  <!-- Main content -->
   <main class="main" id="main-content"></main>
 </div>
 
-<!-- ── SHARED MODAL ───────────────────────────────────────────────────── -->
+<!-- ─── Toast host ──────────────────────────────────────────── -->
+<div id="toast-host"></div>
+
+<!-- ─── Shared Modal ────────────────────────────────────────── -->
 <div class="modal-overlay" id="modal-overlay">
   <div class="modal">
-    <div class="modal-header">
+    <div class="modal-head">
       <h3 id="modal-title">—</h3>
       <button class="modal-close" id="modal-close">✕</button>
     </div>

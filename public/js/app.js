@@ -4,14 +4,21 @@
    UTILITIES
 ════════════════════════════════════════════════════════════════ */
 const $ = id => document.getElementById(id);
+const escapeHtml = s => String(s ?? '').replace(/[&<>"']/g, c =>
+  ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
 
 async function api(method, path, body) {
   const opts = { method, headers: { 'Content-Type': 'application/json' } };
   if (body) opts.body = JSON.stringify(body);
-  const res = await fetch('/api' + path, opts);
+  const res  = await fetch('/api' + path, opts);
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw Object.assign(new Error(data.error || 'Request failed'), { status: res.status });
   return data;
+}
+
+function debounce(fn, ms = 300) {
+  let t;
+  return (...a) => { clearTimeout(t); t = setTimeout(() => fn(...a), ms); };
 }
 
 function fmt(iso) {
@@ -21,63 +28,94 @@ function fmt(iso) {
        + ' ' + d.toLocaleTimeString('en-GB', { hour:'2-digit', minute:'2-digit' });
 }
 
-function badge(text, type) { return `<span class="badge badge-${type}">${text}</span>`; }
+function fmtDateOnly(iso) {
+  if (!iso) return '—';
+  return new Date(iso).toLocaleDateString('en-GB', { day:'2-digit', month:'short', year:'numeric' });
+}
+
+const todayISO = () => new Date().toISOString().slice(0,10);
+
+function badge(text, type='gray') {
+  return `<span class="badge badge-${type}">${escapeHtml(text)}</span>`;
+}
+
+/* ─── Toast ───────────────────────────────────────────── */
+function toast(message, kind = 'success') {
+  const host = $('toast-host');
+  const el = document.createElement('div');
+  el.className = `toast ${kind}`;
+  const ico = { success: '✓', error: '⚠', warning: '!', info: 'ℹ' }[kind] || '✓';
+  el.innerHTML = `<div class="ico">${ico}</div><div class="body">${escapeHtml(message)}</div>`;
+  host.appendChild(el);
+  setTimeout(() => {
+    el.style.transition = 'opacity .2s, transform .2s';
+    el.style.opacity = '0'; el.style.transform = 'translateX(20px)';
+    setTimeout(() => el.remove(), 200);
+  }, 3000);
+}
+
+/* ─── Skeleton helpers ────────────────────────────────── */
+const skelLines = n => Array.from({length: n}, (_, i) =>
+  `<div class="skel skel-line ${i % 2 ? 'med' : 'short'}"></div>`).join('');
+const skelRows  = n => Array.from({length: n}, () =>
+  `<div class="skel skel-row"></div>`).join('');
 
 /* ════════════════════════════════════════════════════════════════
-   ROLE CONFIGURATION
+   ROLE CONFIG
 ════════════════════════════════════════════════════════════════ */
 const ROLE_CONFIG = {
   Administrator: {
-    bodyClass: 'role-admin',
-    pill: 'Admin',
+    theme: 'role-admin',
+    badge: 'Admin',
     nav: [
       { section: 'Overview' },
-      { page: 'dashboard',        icon: '📊', label: 'Dashboard' },
-      { section: '[ Patient Module ]' },
+      { page: 'dashboard',        icon: '🏠', label: 'Dashboard' },
+      { section: 'Patients' },
       { page: 'patient-search',   icon: '🔍', label: '[ Patient Search ]' },
-      { page: 'patient-register', icon: '➕', label: '[ Registration Form ]' },
-      { section: '[ Inventory Module ]' },
+      { page: 'patient-register', icon: '➕', label: '[ New Patient ]' },
+      { section: 'Inventory' },
       { page: 'stock-ledger',     icon: '📦', label: '[ Stock Ledger ]' },
-      { page: 'low-stock',        icon: '⚠️', label: '[ Low Stock Alerts ]' },
-      { section: '[ Queue Module ]' },
+      { page: 'low-stock',        icon: '⚠️', label: '[ Low Stock ]' },
+      { section: 'Clinical Flow' },
       { page: 'triage-queue',     icon: '🚑', label: '[ Triage Queue ]' },
       { page: 'staff-roster',     icon: '👥', label: '[ Staff Roster ]' },
-      { section: '[ Docs Module ]' },
-      { page: 'doc-library',      icon: '📚', label: '[ Document Library ]' },
+      { section: 'Resources' },
+      { page: 'doc-library',      icon: '📚', label: '[ Documents ]' },
     ],
   },
   Doctor: {
-    bodyClass: 'role-doctor',
-    pill: 'Doctor',
+    theme: 'role-doctor',
+    badge: 'Doctor',
     nav: [
       { section: 'Overview' },
-      { page: 'dashboard',      icon: '📊', label: 'Dashboard' },
-      { section: '[ Patient Module ]' },
+      { page: 'dashboard',      icon: '🏠', label: 'Dashboard' },
+      { section: 'Patients' },
       { page: 'patient-search', icon: '🔍', label: '[ Patient Search ]' },
-      { section: '[ Queue Module ]' },
+      { section: 'Clinical Flow' },
       { page: 'triage-queue',   icon: '🚑', label: '[ Triage Queue ]' },
-      { section: '[ Docs Module ]' },
-      { page: 'doc-library',    icon: '📚', label: '[ Document Library ]' },
+      { section: 'Resources' },
+      { page: 'doc-library',    icon: '📚', label: '[ Documents ]' },
     ],
   },
   Nurse: {
-    bodyClass: 'role-nurse',
-    pill: 'Nurse',
+    theme: 'role-nurse',
+    badge: 'Nurse',
     nav: [
       { section: 'Overview' },
-      { page: 'dashboard',        icon: '📊', label: 'Dashboard' },
-      { section: '[ Patient Module ]' },
-      { page: 'patient-register', icon: '➕', label: '[ Registration Form ]' },
-      { section: '[ Queue Module ]' },
+      { page: 'dashboard',        icon: '🏠', label: 'Dashboard' },
+      { section: 'Patients' },
+      { page: 'patient-register', icon: '➕', label: '[ New Patient ]' },
+      { section: 'Clinical Flow' },
       { page: 'triage-queue',     icon: '🚑', label: '[ Triage Queue ]' },
       { page: 'staff-roster',     icon: '👥', label: '[ Staff Roster ]' },
-      { section: '[ Inventory Module ]' },
+      { section: 'Inventory' },
       { page: 'stock-ledger',     icon: '📦', label: '[ Stock Ledger ]' },
     ],
   },
 };
 
 let currentRole = null;
+let currentUser = null;
 let currentPage = null;
 
 /* ════════════════════════════════════════════════════════════════
@@ -87,10 +125,10 @@ function startClock() {
   const el = $('clock');
   const tick = () => {
     el.textContent = new Date().toLocaleTimeString('en-GB',
-      { weekday:'short', day:'2-digit', month:'short',
-        hour:'2-digit', minute:'2-digit', second:'2-digit' });
+      { weekday: 'short', day: '2-digit', month: 'short',
+        hour: '2-digit', minute: '2-digit' });
   };
-  tick(); setInterval(tick, 1000);
+  tick(); setInterval(tick, 30000);
 }
 
 /* ════════════════════════════════════════════════════════════════
@@ -104,6 +142,13 @@ function openModal(title, html) {
 function closeModal() { $('modal-overlay').classList.remove('open'); }
 $('modal-close').onclick = closeModal;
 $('modal-overlay').onclick = e => { if (e.target === $('modal-overlay')) closeModal(); };
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') closeModal();
+  if (e.key === '/' && $('app').style.display === 'block' &&
+      document.activeElement.tagName !== 'INPUT' && document.activeElement.tagName !== 'TEXTAREA') {
+    e.preventDefault(); $('global-search-input').focus();
+  }
+});
 
 /* ════════════════════════════════════════════════════════════════
    SIDEBAR BUILD
@@ -111,15 +156,13 @@ $('modal-overlay').onclick = e => { if (e.target === $('modal-overlay')) closeMo
 function buildSidebar(role) {
   const cfg = ROLE_CONFIG[role];
   if (!cfg) return;
-  const sidebar = $('sidebar');
-  sidebar.innerHTML = cfg.nav.map(item => {
-    if (item.section) return `<div class="nav-section">${item.section}</div>`;
-    return `<div class="nav-item" data-page="${item.page}">
-      <span class="icon">${item.icon}</span>${item.label}
-    </div>`;
-  }).join('');
-
-  sidebar.querySelectorAll('.nav-item').forEach(el => {
+  $('sidebar').innerHTML = cfg.nav.map(it => it.section
+    ? `<div class="nav-section">${escapeHtml(it.section)}</div>`
+    : `<div class="nav-item" data-page="${it.page}">
+         <span class="icon">${it.icon}</span>${escapeHtml(it.label)}
+       </div>`
+  ).join('');
+  $('sidebar').querySelectorAll('.nav-item').forEach(el => {
     el.onclick = () => navigate(el.dataset.page);
   });
 }
@@ -127,14 +170,14 @@ function buildSidebar(role) {
 /* ════════════════════════════════════════════════════════════════
    NAVIGATION
 ════════════════════════════════════════════════════════════════ */
+const PAGES = {};
 function navigate(page) {
   currentPage = page;
   $('sidebar').querySelectorAll('.nav-item').forEach(el =>
     el.classList.toggle('active', el.dataset.page === page));
-  const render = PAGES[page];
-  if (render) render($('main-content'));
-  else $('main-content').innerHTML =
-    `<div class="empty-state"><div class="icon">🚧</div><p>${page} — coming soon</p></div>`;
+  const fn = PAGES[page];
+  if (fn) fn($('main-content'));
+  else $('main-content').innerHTML = `<div class="empty"><div class="icon">🚧</div><p>${page} — coming soon</p></div>`;
 }
 
 /* ════════════════════════════════════════════════════════════════
@@ -148,88 +191,104 @@ async function tryLogin() {
   try {
     const { name, role } = await api('POST', '/auth/login', { username: u, password: p });
     currentRole = role;
+    currentUser = name;
     const cfg = ROLE_CONFIG[role] || ROLE_CONFIG.Administrator;
 
-    // Apply role theme
-    document.body.className = cfg.bodyClass;
-
-    // Update navbar
+    document.body.className = cfg.theme;
     $('user-name').textContent = name;
-    $('role-pill').textContent = cfg.pill;
-    $('role-pill').className   = `role-pill ${cfg.bodyClass.replace('role-','')}`;
+    $('user-role').textContent = cfg.badge;
+    $('user-avatar').textContent = (name || '?').charAt(0).toUpperCase();
 
-    // Build sidebar and show app
     buildSidebar(role);
     $('login-screen').style.display = 'none';
     $('app').style.display = 'block';
     startClock();
+    setupGlobalSearch();
     navigate('dashboard');
+    toast(`Welcome back, ${name.split(' ')[0]}`, 'success');
   } catch (err) {
     $('login-error').textContent = err.message;
   }
   $('login-btn').textContent = 'Sign In';
 }
-
 $('login-btn').onclick = tryLogin;
 $('password').onkeydown = e => { if (e.key === 'Enter') tryLogin(); };
 $('logout-btn').onclick = async () => {
   await api('POST', '/auth/logout');
   document.body.className = '';
-  currentRole = null;
+  currentRole = null; currentUser = null;
   $('app').style.display = 'none';
   $('login-screen').style.display = 'flex';
   $('username').value = ''; $('password').value = '';
 };
 
 /* ════════════════════════════════════════════════════════════════
-   PAGES REGISTRY
+   GLOBAL SEARCH (navbar)
 ════════════════════════════════════════════════════════════════ */
-const PAGES = {};
-
-/* ────────────────────────────────────────────────────────────────
-   DASHBOARD — routes to role-specific renderer
-──────────────────────────────────────────────────────────────── */
-PAGES['dashboard'] = (el) => {
-  if (currentRole === 'Doctor')    renderDoctorDashboard(el);
-  else if (currentRole === 'Nurse') renderNurseDashboard(el);
-  else                              renderAdminDashboard(el);
-};
+function setupGlobalSearch() {
+  const input = $('global-search-input');
+  const runSearch = debounce(async () => {
+    const q = input.value.trim();
+    if (!q) return;
+    if (currentPage !== 'patient-search') navigate('patient-search');
+    setTimeout(() => {
+      const local = $('ps-input');
+      if (local) { local.value = q; local.dispatchEvent(new Event('input')); }
+    }, 60);
+  }, 350);
+  input.oninput = runSearch;
+  input.onkeydown = e => {
+    if (e.key === 'Escape') input.blur();
+  };
+}
 
 /* ════════════════════════════════════════════════════════════════
-   ADMIN DASHBOARD
+   DASHBOARD — routes per role
 ════════════════════════════════════════════════════════════════ */
+PAGES['dashboard'] = (el) => {
+  if (currentRole === 'Doctor')      renderDoctorDashboard(el);
+  else if (currentRole === 'Nurse')  renderNurseDashboard(el);
+  else                                renderAdminDashboard(el);
+};
+
+/* ─────────────── ADMIN DASHBOARD ─────────────── */
 async function renderAdminDashboard(el) {
   el.innerHTML = `
     <div class="page-header">
-      <div><h2>Admin Dashboard</h2><p>System overview — all modules</p></div>
-      <button class="btn btn-ghost btn-sm" onclick="navigate('dashboard')">↻ Refresh</button>
+      <div>
+        <h1>Welcome, ${escapeHtml(currentUser?.split(' ')[0] || 'Admin')}</h1>
+        <p>System overview — ${new Date().toLocaleDateString('en-GB',{weekday:'long', day:'numeric', month:'long'})}</p>
+      </div>
+      <div class="page-actions">
+        <button class="btn btn-secondary btn-sm" onclick="navigate('dashboard')">↻ Refresh</button>
+      </div>
     </div>
-    <div class="stat-grid" id="a-stats">
-      <div class="stat-card"><div class="stat-icon blue">👤</div><div><div class="stat-value" id="a-patients">—</div><div class="stat-label">Total Patients</div></div></div>
-      <div class="stat-card"><div class="stat-icon orange">🚑</div><div><div class="stat-value" id="a-queue">—</div><div class="stat-label">In Triage Queue</div></div></div>
-      <div class="stat-card"><div class="stat-icon red">⚠️</div><div><div class="stat-value" id="a-lowstock">—</div><div class="stat-label">Low Stock Alerts</div></div></div>
-      <div class="stat-card"><div class="stat-icon green">👥</div><div><div class="stat-value" id="a-staff">—</div><div class="stat-label">Staff On Duty</div></div></div>
+    <div class="stat-grid">
+      ${['Patients','Queue Waiting','Low Stock','Staff On Duty'].map((l,i) =>
+        `<div class="stat"><div class="stat-icon ${['teal','warning','danger','success'][i]}">${['👤','🚑','⚠️','👥'][i]}</div>
+         <div><div class="stat-value" id="ad-${i}">${skelLines(1)}</div><div class="stat-label">${l}</div></div></div>`
+      ).join('')}
     </div>
-    <div class="col-6040" style="margin-bottom:16px">
+    <div class="col-6040" style="margin-bottom:20px">
       <div class="card">
-        <div class="card-header"><h3>🚑 Active Triage Queue</h3>
-          <button class="btn btn-ghost btn-xs" onclick="navigate('triage-queue')">View all →</button>
+        <div class="card-head"><h2>🚑 Active Triage Queue</h2>
+          <a class="meta" href="#" onclick="event.preventDefault();navigate('triage-queue')">View all →</a>
         </div>
-        <div id="a-queue-preview"></div>
+        <div id="ad-queue">${skelRows(4)}</div>
       </div>
       <div class="card">
-        <div class="card-header"><h3>⚠️ Low Stock</h3>
-          <button class="btn btn-ghost btn-xs" onclick="navigate('low-stock')">View all →</button>
+        <div class="card-head"><h2>⚠️ Critical Low Stock</h2>
+          <a class="meta" href="#" onclick="event.preventDefault();navigate('low-stock')">View all →</a>
         </div>
-        <div id="a-stock-preview"></div>
+        <div id="ad-stock">${skelRows(4)}</div>
       </div>
     </div>
     <div class="card">
-      <div class="card-header"><h3>🖥️ System Health</h3></div>
-      <div class="card-body" id="a-health">Loading…</div>
+      <div class="card-head"><h2>🖥 System Health</h2><span class="meta">Live</span></div>
+      <div class="card-body" id="ad-health">${skelLines(2)}</div>
     </div>`;
 
-  const [patients, queue, lowStock, staff, health] = await Promise.allSettled([
+  const [pAll, q, ls, st, h] = await Promise.allSettled([
     api('GET', '/patients?limit=9999'),
     api('GET', '/queue?status=waiting'),
     api('GET', '/inventory/alerts/low-stock'),
@@ -237,356 +296,339 @@ async function renderAdminDashboard(el) {
     fetch('/api/health').then(r => r.json()),
   ]);
 
-  if (patients.status === 'fulfilled') $('a-patients').textContent = patients.value.count ?? 0;
-  if (queue.status === 'fulfilled') {
-    $('a-queue').textContent = queue.value.data?.length ?? 0;
-    const rows = queue.value.data || [];
-    $('a-queue-preview').innerHTML = rows.length
-      ? `<table><thead><tr><th>Level</th><th>Patient</th><th>Complaint</th></tr></thead><tbody>
-          ${rows.slice(0,5).map(r => `<tr class="triage-${r.triage_level}">
-            <td><strong>T${r.triage_level}</strong></td>
-            <td>${r.full_name||'—'}</td>
-            <td style="max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${r.chief_complaint}</td>
-          </tr>`).join('')}</tbody></table>`
-      : '<div class="empty-state" style="padding:20px"><p>Queue is clear</p></div>';
+  if (pAll.status==='fulfilled') $('ad-0').textContent = pAll.value.count ?? 0;
+  if (q.status==='fulfilled') {
+    const rows = q.value.data || [];
+    $('ad-1').textContent = rows.length;
+    $('ad-queue').innerHTML = rows.length ? `<div class="table-wrap"><table>
+      <thead><tr><th>Lvl</th><th>Patient</th><th>Complaint</th></tr></thead>
+      <tbody>${rows.slice(0,5).map(r => `<tr class="tri-${r.triage_level} tri">
+        <td><span class="tri-num t${r.triage_level}">T${r.triage_level}</span></td>
+        <td>${escapeHtml(r.full_name||'—')}</td>
+        <td class="ellipsis" style="max-width:180px">${escapeHtml(r.chief_complaint)}</td>
+      </tr>`).join('')}</tbody></table></div>`
+      : `<div class="empty"><div class="icon">✅</div><p>Queue is clear</p></div>`;
   }
-  if (lowStock.status === 'fulfilled') {
-    $('a-lowstock').textContent = lowStock.value.alert_count ?? 0;
-    const items = lowStock.value.data || [];
-    $('a-stock-preview').innerHTML = items.length
-      ? `<table><thead><tr><th>Item</th><th>On Hand</th></tr></thead><tbody>
-          ${items.slice(0,5).map(i => `<tr>
-            <td>${i.item_name}</td>
-            <td>${badge(i.quantity_on_hand,'red')}</td>
-          </tr>`).join('')}</tbody></table>`
-      : '<div class="empty-state" style="padding:20px"><div class="icon">✅</div><p>All stock OK</p></div>';
+  if (ls.status==='fulfilled') {
+    $('ad-2').textContent = ls.value.alert_count ?? 0;
+    const items = ls.value.data || [];
+    $('ad-stock').innerHTML = items.length ? `<div class="table-wrap"><table>
+      <thead><tr><th>Item</th><th>On hand</th><th>Threshold</th></tr></thead>
+      <tbody>${items.slice(0,5).map(i => `<tr>
+        <td>${escapeHtml(i.item_name)}</td>
+        <td>${badge(i.quantity_on_hand,'danger')}</td>
+        <td>${i.reorder_threshold}</td>
+      </tr>`).join('')}</tbody></table></div>`
+      : `<div class="empty"><div class="icon">✅</div><p>All stock above threshold</p></div>`;
   }
-  if (staff.status === 'fulfilled') $('a-staff').textContent = staff.value.data?.length ?? 0;
-  if (health.status === 'fulfilled') {
-    const h = health.value;
-    $('a-health').innerHTML = `<div class="health-grid">
-      <div class="health-item"><div class="val" style="color:var(--green)">${h.status}</div><div class="lbl">Status</div></div>
-      <div class="health-item"><div class="val">${Math.floor(h.uptime_s/3600)}h ${Math.floor((h.uptime_s%3600)/60)}m</div><div class="lbl">Uptime</div></div>
-      <div class="health-item"><div class="val">${h.memory.rss_mb} MB</div><div class="lbl">RAM Used</div></div>
-      <div class="health-item"><div class="val">${h.memory.heap_used_mb}/${h.memory.heap_total_mb} MB</div><div class="lbl">Heap</div></div>
-      <div class="health-item"><div class="val" style="color:${h.db_status==='connected'?'var(--green)':'var(--red)'}">${h.db_status}</div><div class="lbl">Database</div></div>
+  if (st.status==='fulfilled') $('ad-3').textContent = st.value.data?.length ?? 0;
+  if (h.status==='fulfilled') {
+    const v = h.value;
+    $('ad-health').innerHTML = `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:16px">
+      ${[['Status', v.status, 'color:var(--success);'],
+         ['Uptime', `${Math.floor(v.uptime_s/3600)}h ${Math.floor((v.uptime_s%3600)/60)}m`, ''],
+         ['RAM Used', `${v.memory.rss_mb} MB`, ''],
+         ['Heap', `${v.memory.heap_used_mb}/${v.memory.heap_total_mb} MB`, ''],
+         ['Database', v.db_status, v.db_status==='connected'?'color:var(--success);':'color:var(--danger);'],
+        ].map(([lbl,val,sty]) => `<div>
+          <div style="font-size:11px;color:var(--text-mut);text-transform:uppercase;letter-spacing:.5px">${lbl}</div>
+          <div style="font-size:16px;font-weight:700;margin-top:3px;${sty}">${val}</div>
+        </div>`).join('')}
     </div>`;
   }
 }
 
-/* ════════════════════════════════════════════════════════════════
-   DOCTOR DASHBOARD
-════════════════════════════════════════════════════════════════ */
+/* ─────────────── DOCTOR DASHBOARD ─────────────── */
 async function renderDoctorDashboard(el) {
   el.innerHTML = `
     <div class="page-header">
-      <div><h2>Doctor Dashboard</h2><p>Active queue and patient records</p></div>
-      <button class="btn btn-ghost btn-sm" onclick="navigate('dashboard')">↻ Refresh</button>
+      <div>
+        <h1>Welcome, Dr. ${escapeHtml(currentUser?.split(' ').slice(-1)[0] || 'Doctor')}</h1>
+        <p>${new Date().toLocaleDateString('en-GB',{weekday:'long', day:'numeric', month:'long'})}</p>
+      </div>
+      <button class="btn btn-secondary btn-sm" onclick="navigate('dashboard')">↻ Refresh</button>
     </div>
-    <div class="stat-grid" id="d-stats">
-      <div class="stat-card"><div class="stat-icon teal">🚑</div><div><div class="stat-value" id="d-waiting">—</div><div class="stat-label">Patients Waiting</div></div></div>
-      <div class="stat-card"><div class="stat-icon red">🔴</div><div><div class="stat-value" id="d-critical">—</div><div class="stat-label">T1–T2 Critical</div></div></div>
-      <div class="stat-card"><div class="stat-icon teal">👤</div><div><div class="stat-value" id="d-patients">—</div><div class="stat-label">Total Patients</div></div></div>
+    <div class="stat-grid">
+      <div class="stat"><div class="stat-icon indigo">🚑</div><div><div class="stat-value" id="dd-waiting">${skelLines(1)}</div><div class="stat-label">In Queue</div></div></div>
+      <div class="stat"><div class="stat-icon danger">🔴</div><div><div class="stat-value" id="dd-critical">${skelLines(1)}</div><div class="stat-label">Critical (T1–T2)</div></div></div>
+      <div class="stat"><div class="stat-icon indigo">👤</div><div><div class="stat-value" id="dd-mine">${skelLines(1)}</div><div class="stat-label">Assigned to Me</div></div></div>
     </div>
     <div class="col-6040">
       <div class="card">
-        <div class="card-header">
-          <h3>🚑 [ Triage Priority Queue ]</h3>
-          <button class="btn btn-teal btn-xs" id="d-enqueue-btn">+ Add to Queue</button>
+        <div class="card-head">
+          <h2>🚑 [ Triage Priority Queue ]</h2>
+          <button class="btn btn-primary-accent btn-xs" onclick="showEnqueueModal(loadDoctorQueue)">+ Add</button>
         </div>
-        <div id="d-queue-table"></div>
+        <div id="dd-queue">${skelRows(5)}</div>
       </div>
       <div class="card">
-        <div class="card-header"><h3>🔍 Patient Lookup</h3></div>
+        <div class="card-head"><h2>🔍 Quick Patient Lookup</h2></div>
         <div class="card-body">
-          <div class="search-bar" style="margin-bottom:8px">
-            <input id="d-lookup-input" placeholder="Name or reference…" type="text">
-            <button class="btn btn-teal btn-sm" id="d-lookup-btn">Go</button>
+          <div class="live-search">
+            <input id="dd-lookup" placeholder="Search by name or reference…" autofocus>
           </div>
-          <div id="d-lookup-result"></div>
+          <div id="dd-lookup-result"></div>
         </div>
       </div>
     </div>`;
 
-  // Load queue stats
-  const [queue, patients] = await Promise.allSettled([
-    api('GET', '/queue?status=waiting'),
-    api('GET', '/patients?limit=9999'),
-  ]);
+  await loadDoctorQueue();
 
-  if (queue.status === 'fulfilled') {
-    const rows = queue.value.data || [];
-    $('d-waiting').textContent  = rows.length;
-    $('d-critical').textContent = rows.filter(r => r.triage_level <= 2).length;
-    renderDoctorQueue(rows);
-  }
-  if (patients.status === 'fulfilled') $('d-patients').textContent = patients.value.count ?? 0;
-
-  $('d-enqueue-btn').onclick = () => showEnqueueModal(loadDoctorQueue);
-  $('d-lookup-btn').onclick  = doPatientLookup;
-  $('d-lookup-input').onkeydown = e => { if (e.key === 'Enter') doPatientLookup(); };
-}
-
-function renderDoctorQueue(rows) {
-  const el = $('d-queue-table');
-  if (!el) return;
-  if (!rows.length) { el.innerHTML = '<div class="empty-state" style="padding:20px"><p>Queue is clear</p></div>'; return; }
-  el.innerHTML = `<table>
-    <thead><tr><th>Lvl</th><th>Patient</th><th>Complaint</th><th>Assigned</th><th></th></tr></thead>
-    <tbody>${rows.slice(0,8).map(r => `
-      <tr class="triage-${r.triage_level}">
-        <td><strong>T${r.triage_level}</strong></td>
-        <td>${r.full_name||'—'}</td>
-        <td style="max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${r.chief_complaint}</td>
-        <td>${r.assigned_to ? badge(r.assigned_to,'teal') : badge('Unassigned','gray')}</td>
-        <td style="white-space:nowrap">
-          <button class="btn btn-xs btn-teal" onclick="quickAssign(${r.id})">Assign Me</button>
-          <button class="btn btn-xs btn-ghost" style="margin-left:3px" onclick="viewNotes(${r.id||0},'${(r.full_name||'').replace(/'/g,"\\'")}')">Notes</button>
-        </td>
-      </tr>`).join('')}
-    </tbody>
-  </table>`;
+  const lookup = debounce(async () => {
+    const q = $('dd-lookup').value.trim();
+    const out = $('dd-lookup-result');
+    if (!q) { out.innerHTML = '<div class="text-faint" style="font-size:12px;padding:8px 0">Type to find a patient — they\'ll appear here</div>'; return; }
+    try {
+      const { data } = await api('GET', `/patients?q=${encodeURIComponent(q)}&limit=6`);
+      out.innerHTML = data.length ? data.map(p => `
+        <div class="recent-item" style="display:flex;justify-content:space-between;align-items:center;gap:8px">
+          <div style="flex:1;min-width:0">
+            <div class="name ellipsis">${escapeHtml(p.full_name)}</div>
+            <div class="meta">${escapeHtml(p.patient_ref)} · DOB ${escapeHtml(p.date_of_birth)}</div>
+          </div>
+          <button class="btn btn-xs btn-primary-accent" onclick="viewNotes(${p.id},'${escapeHtml(p.full_name).replace(/'/g,'&apos;')}')">📋 Notes</button>
+        </div>`).join('')
+        : '<div class="empty" style="padding:24px"><p>No patients found</p></div>';
+    } catch(e) { out.innerHTML = `<div class="alert alert-error">${escapeHtml(e.message)}</div>`; }
+  });
+  $('dd-lookup').oninput = lookup;
 }
 
 async function loadDoctorQueue() {
   try {
     const { data } = await api('GET', '/queue?status=waiting');
-    if ($('d-waiting')) $('d-waiting').textContent = data.length;
-    if ($('d-critical')) $('d-critical').textContent = data.filter(r => r.triage_level <= 2).length;
-    renderDoctorQueue(data);
-  } catch(e) { console.error(e); }
+    const mineCount = data.filter(r => r.assigned_to === currentUser).length;
+    if ($('dd-waiting'))  $('dd-waiting').textContent  = data.length;
+    if ($('dd-critical')) $('dd-critical').textContent = data.filter(r => r.triage_level <= 2).length;
+    if ($('dd-mine'))     $('dd-mine').textContent     = mineCount;
+
+    const el = $('dd-queue');
+    if (!el) return;
+    el.innerHTML = data.length ? `<div class="table-wrap"><table>
+      <thead><tr><th>Lvl</th><th>Patient</th><th>Complaint</th><th>Assigned</th><th></th></tr></thead>
+      <tbody>${data.slice(0,8).map(r => `<tr class="tri-${r.triage_level} tri">
+        <td><span class="tri-num t${r.triage_level}">T${r.triage_level}</span></td>
+        <td>${escapeHtml(r.full_name||'—')}</td>
+        <td class="ellipsis" style="max-width:140px">${escapeHtml(r.chief_complaint)}</td>
+        <td>${r.assigned_to ? badge(r.assigned_to,'indigo') : badge('Unassigned','gray')}</td>
+        <td style="white-space:nowrap">
+          ${r.assigned_to !== currentUser
+            ? `<button class="btn btn-xs btn-primary-accent" onclick="assignToMe(${r.id})">Assign me</button>`
+            : `<button class="btn btn-xs btn-ghost" onclick="resolveQueue(${r.id})">Mark done</button>`}
+        </td>
+      </tr>`).join('')}</tbody></table></div>`
+      : `<div class="empty"><div class="icon">✅</div><p>Queue is clear</p></div>`;
+  } catch(e) { toast(e.message, 'error'); }
 }
 
-window.quickAssign = async (id) => {
-  const name = $('user-name')?.textContent || 'Doctor';
+window.assignToMe = async (id) => {
   try {
-    await api('PATCH', `/queue/${id}`, { assigned_to: name });
+    await api('PATCH', `/queue/${id}`, { assigned_to: currentUser });
+    toast('Case assigned to you', 'success');
     loadDoctorQueue();
-  } catch(e) { alert(e.message); }
+  } catch(e) { toast(e.message, 'error'); }
 };
 
-async function doPatientLookup() {
-  const q = $('d-lookup-input').value.trim();
-  if (!q) return;
-  const el = $('d-lookup-result');
-  el.innerHTML = '<div style="color:var(--gray-400);font-size:12px">Searching…</div>';
-  try {
-    const { data } = await api('GET', `/patients?q=${encodeURIComponent(q)}&limit=5`);
-    if (!data.length) { el.innerHTML = '<div style="color:var(--gray-400);font-size:12px">No patients found</div>'; return; }
-    el.innerHTML = data.map(p => `
-      <div style="padding:8px 0;border-bottom:1px solid var(--gray-100);display:flex;justify-content:space-between;align-items:center">
-        <div>
-          <div style="font-weight:600;font-size:12px">${p.full_name}</div>
-          <div style="font-size:11px;color:var(--gray-600)">${p.patient_ref} · ${p.date_of_birth}</div>
-        </div>
-        <button class="btn btn-xs btn-teal" onclick="viewNotes(${p.id},'${p.full_name.replace(/'/g,"\\'")}')">📋 Notes</button>
-      </div>`).join('');
-  } catch(e) { el.innerHTML = `<div class="alert-strip error" style="margin:0">${e.message}</div>`; }
-}
-
-/* ════════════════════════════════════════════════════════════════
-   NURSE DASHBOARD
-════════════════════════════════════════════════════════════════ */
+/* ─────────────── NURSE DASHBOARD ─────────────── */
 async function renderNurseDashboard(el) {
   el.innerHTML = `
     <div class="page-header">
-      <div><h2>Nurse Dashboard</h2><p>Triage intake, queue and inventory</p></div>
-      <button class="btn btn-ghost btn-sm" onclick="navigate('dashboard')">↻ Refresh</button>
+      <div>
+        <h1>Welcome, ${escapeHtml(currentUser?.split(' ')[0] || 'Nurse')}</h1>
+        <p>Triage intake and ward overview</p>
+      </div>
+      <button class="btn btn-secondary btn-sm" onclick="navigate('dashboard')">↻ Refresh</button>
     </div>
     <div class="stat-grid">
-      <div class="stat-card"><div class="stat-icon purple">🚑</div><div><div class="stat-value" id="n-waiting">—</div><div class="stat-label">Queue Waiting</div></div></div>
-      <div class="stat-card"><div class="stat-icon red">⚠️</div><div><div class="stat-value" id="n-lowstock">—</div><div class="stat-label">Low Stock Items</div></div></div>
-      <div class="stat-card"><div class="stat-icon green">👥</div><div><div class="stat-value" id="n-staff">—</div><div class="stat-label">On Duty</div></div></div>
+      <div class="stat"><div class="stat-icon rose">🚑</div><div><div class="stat-value" id="nd-waiting">${skelLines(1)}</div><div class="stat-label">Queue Waiting</div></div></div>
+      <div class="stat"><div class="stat-icon danger">⚠️</div><div><div class="stat-value" id="nd-stock">${skelLines(1)}</div><div class="stat-label">Low Stock</div></div></div>
+      <div class="stat"><div class="stat-icon success">👥</div><div><div class="stat-value" id="nd-staff">${skelLines(1)}</div><div class="stat-label">On Duty</div></div></div>
     </div>
     <div class="col-4060">
-      <div class="intake-card">
-        <div class="card-header"><h3>➕ Quick Triage Intake</h3></div>
+      <div class="card">
+        <div class="card-head"><h2>➕ Quick Triage Intake</h2><span class="meta">3 steps</span></div>
         <div class="card-body">
-          <div id="n-intake-msg"></div>
-          <div class="form-group" style="margin-bottom:10px">
-            <label>Patient Reference</label>
-            <div class="inline-row">
-              <input id="n-ref" placeholder="e.g. PAT-001">
-              <button class="btn btn-purple btn-sm" id="n-lookup-btn">Find</button>
+          <div id="nd-intake-msg"></div>
+          <div class="form-group" style="margin-bottom:12px">
+            <label>1. Patient Reference <span class="req">*</span></label>
+            <div class="row" style="gap:6px">
+              <input id="nd-ref" placeholder="e.g. PAT-001" style="flex:1;padding:0 12px;height:36px;border:1.5px solid var(--border);border-radius:var(--r);font-size:13px;outline:none;color:var(--text);background:var(--surface)">
+              <button class="btn btn-secondary btn-sm" id="nd-find-btn" style="flex:0">Find</button>
             </div>
           </div>
-          <div id="n-patient-found" style="display:none;margin-bottom:10px;padding:8px 10px;background:var(--accent-light);border-radius:6px;font-size:12px"></div>
-          <div class="form-group" style="margin-bottom:10px">
-            <label>Triage Level</label>
-            <select id="n-level">
-              <option value="1">T1 — Immediate</option>
+          <div id="nd-patient-card" class="hidden" style="margin-bottom:12px;padding:10px 12px;background:var(--accent-tint);border-radius:var(--r);font-size:12px;border:1px solid var(--accent-soft)"></div>
+          <div class="form-group" style="margin-bottom:12px">
+            <label>2. Triage Level <span class="req">*</span></label>
+            <select id="nd-level">
+              <option value="1">T1 — Immediate (life-threatening)</option>
               <option value="2">T2 — Emergent</option>
               <option value="3" selected>T3 — Urgent</option>
               <option value="4">T4 — Semi-Urgent</option>
               <option value="5">T5 — Non-Urgent</option>
             </select>
           </div>
-          <div class="form-group" style="margin-bottom:14px">
-            <label>Chief Complaint</label>
-            <textarea id="n-complaint" rows="2" placeholder="Presenting complaint…"></textarea>
+          <div class="form-group" style="margin-bottom:16px">
+            <label>3. Chief Complaint <span class="req">*</span></label>
+            <textarea id="nd-complaint" rows="2" placeholder="What brings them in?"></textarea>
           </div>
-          <button class="btn btn-purple" id="n-enqueue-btn" style="width:100%">Add to Triage Queue</button>
+          <button class="btn btn-primary-accent" id="nd-submit" style="width:100%">Add to Triage Queue</button>
         </div>
       </div>
       <div class="card">
-        <div class="card-header">
-          <h3>🚑 Current Queue</h3>
-          <button class="btn btn-ghost btn-xs" onclick="navigate('triage-queue')">Full view →</button>
+        <div class="card-head">
+          <h2>🚑 Current Queue</h2>
+          <a class="meta" href="#" onclick="event.preventDefault();navigate('triage-queue')">View all →</a>
         </div>
-        <div id="n-queue-preview"></div>
+        <div id="nd-queue">${skelRows(5)}</div>
       </div>
     </div>`;
 
-  let foundPatientId = null;
+  let foundId = null;
 
-  $('n-lookup-btn').onclick = async () => {
-    const ref = $('n-ref').value.trim();
+  $('nd-find-btn').onclick = async () => {
+    const ref = $('nd-ref').value.trim();
     if (!ref) return;
     try {
       const { data } = await api('GET', `/patients?q=${encodeURIComponent(ref)}&limit=1`);
       if (!data.length) {
-        $('n-patient-found').style.display = 'none';
-        $('n-intake-msg').innerHTML = '<div class="alert-strip error" style="margin-bottom:8px">Patient not found — register them first</div>';
-        foundPatientId = null;
+        $('nd-patient-card').classList.add('hidden');
+        foundId = null;
+        toast('Patient not found — register them first', 'warning');
         return;
       }
-      foundPatientId = data[0].id;
-      $('n-intake-msg').innerHTML = '';
-      $('n-patient-found').style.display = 'block';
-      $('n-patient-found').innerHTML = `<strong>${data[0].full_name}</strong> · ${data[0].patient_ref} · DOB ${data[0].date_of_birth}`;
-    } catch(e) { $('n-intake-msg').innerHTML = `<div class="alert-strip error">${e.message}</div>`; }
+      foundId = data[0].id;
+      $('nd-patient-card').classList.remove('hidden');
+      $('nd-patient-card').innerHTML = `<strong>${escapeHtml(data[0].full_name)}</strong>
+        · ${escapeHtml(data[0].patient_ref)} · DOB ${escapeHtml(data[0].date_of_birth)}
+        ${data[0].blood_group ? '· '+badge(data[0].blood_group,'danger') : ''}`;
+    } catch(e) { toast(e.message, 'error'); }
   };
+  $('nd-ref').onkeydown = e => { if (e.key === 'Enter') $('nd-find-btn').click(); };
 
-  $('n-enqueue-btn').onclick = async () => {
-    if (!foundPatientId) { $('n-intake-msg').innerHTML = '<div class="alert-strip error" style="margin-bottom:8px">Find a patient first</div>'; return; }
-    const complaint = $('n-complaint').value.trim();
-    if (!complaint) { $('n-intake-msg').innerHTML = '<div class="alert-strip error" style="margin-bottom:8px">Enter the chief complaint</div>'; return; }
+  $('nd-submit').onclick = async () => {
+    if (!foundId) { toast('Find a patient first', 'warning'); return; }
+    const complaint = $('nd-complaint').value.trim();
+    if (!complaint) { toast('Enter the chief complaint', 'warning'); return; }
     try {
       await api('POST', '/queue', {
-        patient_id:      foundPatientId,
-        triage_level:    +$('n-level').value,
+        patient_id: foundId,
+        triage_level: +$('nd-level').value,
         chief_complaint: complaint,
       });
-      $('n-intake-msg').innerHTML = '<div class="alert-strip ok" style="margin-bottom:8px">✅ Patient added to queue</div>';
-      $('n-ref').value = ''; $('n-complaint').value = '';
-      $('n-patient-found').style.display = 'none';
-      foundPatientId = null;
+      toast('Patient added to triage queue', 'success');
+      $('nd-ref').value = ''; $('nd-complaint').value = '';
+      $('nd-patient-card').classList.add('hidden');
+      $('nd-level').value = '3';
+      foundId = null;
+      $('nd-ref').focus();
       loadNurseData();
-    } catch(e) { $('n-intake-msg').innerHTML = `<div class="alert-strip error" style="margin-bottom:8px">${e.message}</div>`; }
+    } catch(e) { toast(e.message, 'error'); }
   };
 
-  loadNurseData();
+  await loadNurseData();
 }
 
 async function loadNurseData() {
-  const [queue, lowStock, staff] = await Promise.allSettled([
+  const [q, ls, st] = await Promise.allSettled([
     api('GET', '/queue?status=waiting'),
     api('GET', '/inventory/alerts/low-stock'),
     api('GET', '/queue/roster'),
   ]);
-
-  if (queue.status === 'fulfilled') {
-    const rows = queue.value.data || [];
-    if ($('n-waiting')) $('n-waiting').textContent = rows.length;
-    const prev = $('n-queue-preview');
-    if (prev) {
-      prev.innerHTML = rows.length
-        ? `<table><thead><tr><th>Lvl</th><th>Patient</th><th>Complaint</th><th></th></tr></thead><tbody>
-            ${rows.slice(0,6).map(r => `<tr class="triage-${r.triage_level}">
-              <td><strong>T${r.triage_level}</strong></td>
-              <td>${r.full_name||'—'}</td>
-              <td style="max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${r.chief_complaint}</td>
-              <td><button class="btn btn-xs btn-ghost" onclick="markDone(${r.id})">Done</button></td>
-            </tr>`).join('')}</tbody></table>`
-        : '<div class="empty-state" style="padding:20px"><p>Queue is clear</p></div>';
-    }
+  if (q.status==='fulfilled') {
+    const rows = q.value.data || [];
+    if ($('nd-waiting')) $('nd-waiting').textContent = rows.length;
+    const el = $('nd-queue');
+    if (el) el.innerHTML = rows.length ? `<div class="table-wrap"><table>
+      <thead><tr><th>Lvl</th><th>Patient</th><th>Complaint</th><th></th></tr></thead>
+      <tbody>${rows.slice(0,7).map(r => `<tr class="tri-${r.triage_level} tri">
+        <td><span class="tri-num t${r.triage_level}">T${r.triage_level}</span></td>
+        <td>${escapeHtml(r.full_name||'—')}</td>
+        <td class="ellipsis" style="max-width:140px">${escapeHtml(r.chief_complaint)}</td>
+        <td><button class="btn btn-xs btn-ghost" onclick="resolveQueue(${r.id})">Done</button></td>
+      </tr>`).join('')}</tbody></table></div>`
+      : `<div class="empty"><div class="icon">✅</div><p>Queue is clear</p></div>`;
   }
-  if (lowStock.status === 'fulfilled' && $('n-lowstock'))
-    $('n-lowstock').textContent = lowStock.value.alert_count ?? 0;
-  if (staff.status === 'fulfilled' && $('n-staff'))
-    $('n-staff').textContent = staff.value.data?.length ?? 0;
+  if (ls.status==='fulfilled' && $('nd-stock')) $('nd-stock').textContent = ls.value.alert_count ?? 0;
+  if (st.status==='fulfilled' && $('nd-staff')) $('nd-staff').textContent = st.value.data?.length ?? 0;
 }
 
-window.markDone = async (id) => {
-  try { await api('PATCH', `/queue/${id}`, { status: 'completed' }); loadNurseData(); }
-  catch(e) { alert(e.message); }
-};
-
 /* ════════════════════════════════════════════════════════════════
-   PAGE: PATIENT SEARCH
+   PATIENT SEARCH (live filter)
 ════════════════════════════════════════════════════════════════ */
 PAGES['patient-search'] = async (el) => {
-  const canRegister = currentRole === 'Administrator';
+  const canRegister = ROLE_CONFIG[currentRole]?.nav.some(n => n.page === 'patient-register');
   el.innerHTML = `
     <div class="page-header">
-      <div><h2>[ Patient Search View ]</h2><p>Search by name or reference</p></div>
-      ${canRegister ? '<button class="btn btn-accent" onclick="navigate(\'patient-register\')">+ Register Patient</button>' : ''}
+      <div><h1>[ Patient Search ]</h1><p>Search by name or reference — results appear as you type</p></div>
+      ${canRegister ? `<button class="btn btn-primary-accent" onclick="navigate('patient-register')">+ New Patient</button>` : ''}
     </div>
     <div class="card">
       <div class="card-body">
-        <div class="search-bar">
-          <input id="ps-input" placeholder="Search name or patient reference…" type="text">
-          <button class="btn btn-accent" id="ps-btn">Search</button>
+        <div class="live-search">
+          <input id="ps-input" type="text" placeholder="Start typing a name or reference…" autofocus>
         </div>
-        <div id="ps-results"></div>
+        <div id="ps-results">${skelRows(6)}</div>
       </div>
     </div>`;
 
-  const doSearch = async () => {
+  const run = debounce(async () => {
     const q = $('ps-input').value;
-    $('ps-results').innerHTML = '<div style="color:var(--gray-400);padding:8px">Loading…</div>';
     try {
       const { data } = await api('GET', `/patients?q=${encodeURIComponent(q)}&limit=50`);
-      if (!data.length) { $('ps-results').innerHTML = '<div class="empty-state"><div class="icon">👤</div><p>No patients found</p></div>'; return; }
-      $('ps-results').innerHTML = `<table>
+      if (!data.length) {
+        $('ps-results').innerHTML = `<div class="empty">
+          <div class="icon">👤</div>
+          <p>No patients ${q ? 'match this search' : 'registered yet'}</p>
+          ${canRegister ? `<button class="btn btn-primary-accent btn-sm" onclick="navigate('patient-register')">+ Register First Patient</button>` : ''}
+        </div>`;
+        return;
+      }
+      $('ps-results').innerHTML = `<div class="table-wrap"><table>
         <thead><tr><th>Reference</th><th>Name</th><th>DOB</th><th>Blood</th><th>Registered</th><th></th></tr></thead>
         <tbody>${data.map(p => `<tr>
-          <td>${badge(p.patient_ref,'blue')}</td>
-          <td><strong>${p.full_name}</strong></td>
-          <td>${p.date_of_birth}</td>
-          <td>${p.blood_group ? badge(p.blood_group,'red') : '—'}</td>
-          <td>${fmt(p.registered_at)}</td>
-          <td><button class="btn btn-xs btn-ghost" onclick="viewNotes(${p.id},'${p.full_name.replace(/'/g,"\\'")}')">📋 Notes</button></td>
-        </tr>`).join('')}</tbody>
-      </table>`;
-    } catch(e) { $('ps-results').innerHTML = `<div class="alert-strip error">${e.message}</div>`; }
-  };
-
-  $('ps-btn').onclick = doSearch;
-  $('ps-input').onkeydown = e => { if (e.key === 'Enter') doSearch(); };
-  doSearch();
+          <td><span class="mono" style="font-size:12px">${escapeHtml(p.patient_ref)}</span></td>
+          <td><strong>${escapeHtml(p.full_name)}</strong></td>
+          <td>${escapeHtml(p.date_of_birth)}</td>
+          <td>${p.blood_group ? badge(p.blood_group,'danger') : '<span class="text-faint">—</span>'}</td>
+          <td class="text-mut">${fmt(p.registered_at)}</td>
+          <td><button class="btn btn-xs btn-ghost" onclick="viewNotes(${p.id},'${escapeHtml(p.full_name).replace(/'/g,'&apos;')}')">📋 Notes</button></td>
+        </tr>`).join('')}</tbody></table></div>`;
+    } catch(e) { $('ps-results').innerHTML = `<div class="alert alert-error">${escapeHtml(e.message)}</div>`; }
+  });
+  $('ps-input').oninput = run;
+  run();
 };
 
 /* ════════════════════════════════════════════════════════════════
-   CLINICAL NOTES MODAL (shared — Doctor full access, Nurse read-only)
+   CLINICAL NOTES MODAL (write access for Doctor/Admin only)
 ════════════════════════════════════════════════════════════════ */
 window.viewNotes = async (id, name) => {
-  openModal(`[ Clinical Notes Timeline ] — ${name}`, '<div style="color:var(--gray-400)">Loading…</div>');
+  openModal(`[ Clinical Notes ] — ${name}`, skelLines(4));
   try {
     const { data } = await api('GET', `/patients/${id}/notes`);
     const notesHtml = data.length
       ? data.map(n => `
-          <div style="border-left:3px solid var(--accent);padding:9px 12px;margin-bottom:10px;background:var(--gray-50);border-radius:0 6px 6px 0">
-            <div style="display:flex;justify-content:space-between;margin-bottom:5px">
-              <span style="font-weight:600;font-size:12px">${n.authored_by}</span>
-              <span style="font-size:11px;color:var(--gray-400)">${fmt(n.created_at)}</span>
-            </div>
-            ${badge(n.note_type,'blue')}
-            <p style="margin-top:7px;font-size:12px;line-height:1.5">${n.body}</p>
-          </div>`).join('')
-      : '<div class="empty-state" style="padding:20px"><p>No clinical notes on file</p></div>';
+        <div style="border-left:3px solid var(--accent);padding:10px 12px;margin-bottom:10px;background:var(--surface-2);border-radius:0 var(--r) var(--r) 0">
+          <div style="display:flex;justify-content:space-between;margin-bottom:5px">
+            <span style="font-weight:600;font-size:12px">${escapeHtml(n.authored_by)}</span>
+            <span style="font-size:11px;color:var(--text-mut)">${fmt(n.created_at)}</span>
+          </div>
+          ${badge(n.note_type,'teal')}
+          <p style="margin-top:7px;font-size:13px;line-height:1.5">${escapeHtml(n.body)}</p>
+        </div>`).join('')
+      : `<div class="empty" style="padding:24px"><p>No clinical notes on file yet</p></div>`;
 
     const canWrite = currentRole === 'Doctor' || currentRole === 'Administrator';
     const addForm = canWrite ? `
       <hr class="divider">
-      <div style="font-weight:600;font-size:12px;margin-bottom:10px">Add Note</div>
+      <div style="font-weight:600;font-size:13px;margin-bottom:10px">Add note</div>
       <div class="form-grid">
         <div class="form-group">
-          <label>Authored By</label>
-          <input id="note-author" value="${$('user-name')?.textContent||''}">
+          <label>Authored by</label>
+          <input id="note-author" value="${escapeHtml(currentUser||'')}">
         </div>
         <div class="form-group">
-          <label>Note Type</label>
+          <label>Type</label>
           <select id="note-type">
             <option value="progress">Progress</option>
             <option value="admission">Admission</option>
@@ -600,206 +642,277 @@ window.viewNotes = async (id, name) => {
         </div>
       </div>
       <div class="form-actions">
-        <button class="btn btn-accent" id="save-note-btn">Save Note</button>
+        <button class="btn btn-primary-accent" id="save-note">Save Note</button>
       </div>` : '';
 
     $('modal-body').innerHTML = notesHtml + addForm;
 
     if (canWrite) {
-      $('save-note-btn').onclick = async () => {
+      $('save-note').onclick = async () => {
+        const body = $('note-body').value.trim();
+        if (!body) { toast('Note cannot be empty', 'warning'); return; }
         try {
           await api('POST', `/patients/${id}/notes`, {
             authored_by: $('note-author').value,
             note_type:   $('note-type').value,
-            body:        $('note-body').value,
+            body,
           });
+          toast('Note saved', 'success');
           viewNotes(id, name);
-        } catch(e) { alert(e.message); }
+        } catch(e) { toast(e.message, 'error'); }
       };
     }
-  } catch(e) { $('modal-body').innerHTML = `<div class="alert-strip error">${e.message}</div>`; }
+  } catch(e) { $('modal-body').innerHTML = `<div class="alert alert-error">${escapeHtml(e.message)}</div>`; }
 };
 
 /* ════════════════════════════════════════════════════════════════
-   PAGE: PATIENT REGISTRATION FORM
+   PATIENT REGISTRATION (Save & Add Another)
 ════════════════════════════════════════════════════════════════ */
 PAGES['patient-register'] = (el) => {
+  const auto = `PAT-${new Date().getFullYear()}-${Math.floor(Math.random()*9000+1000)}`;
   el.innerHTML = `
     <div class="page-header">
-      <div><h2>[ Patient Registration Form ]</h2><p>Register a new patient</p></div>
+      <div><h1>[ New Patient ]</h1><p>Register a patient — tab through fields, then Save</p></div>
+      <button class="btn btn-secondary" onclick="navigate('patient-search')">← Back to search</button>
     </div>
-    <div class="card" style="max-width:600px">
-      <div class="card-body">
-        <div id="reg-msg"></div>
-        <div class="form-grid">
-          <div class="form-group">
-            <label>Patient Reference *</label>
-            <input id="reg-ref" placeholder="e.g. PAT-2024-001">
+    <div class="col-6040">
+      <div class="card">
+        <div class="card-head"><h2>Patient Details</h2><span class="meta">* required</span></div>
+        <div class="card-body">
+          <div class="form-grid">
+            <div class="form-group">
+              <label>Patient Reference <span class="req">*</span></label>
+              <input id="r-ref" value="${auto}" placeholder="PAT-2024-001">
+              <span class="hint">Auto-generated — edit if your clinic uses a different scheme</span>
+            </div>
+            <div class="form-group">
+              <label>Full Name <span class="req">*</span></label>
+              <input id="r-name" placeholder="Full legal name" autofocus>
+            </div>
+            <div class="form-group">
+              <label>Date of Birth <span class="req">*</span></label>
+              <input id="r-dob" type="date">
+            </div>
+            <div class="form-group">
+              <label>Sex</label>
+              <select id="r-sex">
+                <option value="">— Select —</option>
+                <option value="M">Male</option>
+                <option value="F">Female</option>
+                <option value="O">Other</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label>Blood Group</label>
+              <select id="r-blood">
+                <option value="">— Unknown —</option>
+                <option>A+</option><option>A-</option><option>B+</option><option>B-</option>
+                <option>AB+</option><option>AB-</option><option>O+</option><option>O-</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label>Contact Number</label>
+              <input id="r-contact" placeholder="Phone number">
+            </div>
+            <div class="form-group full">
+              <label>Address</label>
+              <input id="r-address" placeholder="Full address">
+            </div>
+            <div class="form-group full">
+              <label>Known Allergies</label>
+              <textarea id="r-allergy" rows="2" placeholder="e.g. Penicillin, peanuts — or 'None known'"></textarea>
+            </div>
           </div>
-          <div class="form-group">
-            <label>Full Name *</label>
-            <input id="reg-name" placeholder="Full legal name">
-          </div>
-          <div class="form-group">
-            <label>Date of Birth *</label>
-            <input id="reg-dob" type="date">
-          </div>
-          <div class="form-group">
-            <label>Sex</label>
-            <select id="reg-sex">
-              <option value="">— Select —</option>
-              <option value="M">Male</option>
-              <option value="F">Female</option>
-              <option value="O">Other</option>
-            </select>
-          </div>
-          <div class="form-group">
-            <label>Blood Group</label>
-            <select id="reg-blood">
-              <option value="">— Unknown —</option>
-              <option>A+</option><option>A-</option><option>B+</option><option>B-</option>
-              <option>AB+</option><option>AB-</option><option>O+</option><option>O-</option>
-            </select>
-          </div>
-          <div class="form-group">
-            <label>Contact Number</label>
-            <input id="reg-contact" placeholder="Phone number">
-          </div>
-          <div class="form-group full">
-            <label>Address</label>
-            <input id="reg-address" placeholder="Full address">
-          </div>
-          <div class="form-group full">
-            <label>Allergy Notes</label>
-            <textarea id="reg-allergy" rows="2" placeholder="Known allergies or none"></textarea>
+          <div class="form-actions">
+            <button class="btn btn-ghost" id="r-cancel">Clear</button>
+            <button class="btn btn-secondary" id="r-save-only">Save</button>
+            <button class="btn btn-primary-accent" id="r-save-next">Save &amp; Add Another</button>
           </div>
         </div>
-        <div class="form-actions">
-          <button class="btn btn-ghost" onclick="navigate('dashboard')">Cancel</button>
-          <button class="btn btn-accent" id="reg-submit">Register Patient</button>
-        </div>
+      </div>
+      <div class="card">
+        <div class="card-head"><h2>📋 Recently Added</h2><span class="meta">Today</span></div>
+        <div id="r-recent">${skelLines(4)}</div>
       </div>
     </div>`;
 
-  $('reg-submit').onclick = async () => {
-    const ref  = $('reg-ref').value.trim();
-    const name = $('reg-name').value.trim();
-    const dob  = $('reg-dob').value;
-    if (!ref || !name || !dob) {
-      $('reg-msg').innerHTML = '<div class="alert-strip error">Please fill all required (*) fields</div>'; return;
+  const fields = () => ({
+    patient_ref:    $('r-ref').value.trim(),
+    full_name:      $('r-name').value.trim(),
+    date_of_birth:  $('r-dob').value,
+    sex:            $('r-sex').value,
+    blood_group:    $('r-blood').value,
+    contact_number: $('r-contact').value,
+    address:        $('r-address').value,
+    allergy_notes:  $('r-allergy').value,
+  });
+
+  const clearForm = (newRef = true) => {
+    ['r-name','r-dob','r-contact','r-address','r-allergy'].forEach(id => $(id).value = '');
+    $('r-sex').value = ''; $('r-blood').value = '';
+    if (newRef) $('r-ref').value = `PAT-${new Date().getFullYear()}-${Math.floor(Math.random()*9000+1000)}`;
+    $('r-name').focus();
+  };
+
+  const save = async (andAnother) => {
+    const f = fields();
+    if (!f.patient_ref || !f.full_name || !f.date_of_birth) {
+      toast('Reference, Name and DOB are required', 'warning'); return;
     }
     try {
-      $('reg-submit').textContent = 'Registering…';
-      await api('POST', '/patients', {
-        patient_ref: ref, full_name: name, date_of_birth: dob,
-        sex: $('reg-sex').value, blood_group: $('reg-blood').value,
-        contact_number: $('reg-contact').value,
-        address: $('reg-address').value,
-        allergy_notes: $('reg-allergy').value,
-      });
-      $('reg-msg').innerHTML = `<div class="alert-strip ok">✅ <strong>${name}</strong> registered successfully</div>`;
-      ['reg-ref','reg-name','reg-contact','reg-address','reg-allergy'].forEach(id => $(id).value = '');
-      $('reg-dob').value = ''; $('reg-sex').value = ''; $('reg-blood').value = '';
-    } catch(e) {
-      $('reg-msg').innerHTML = `<div class="alert-strip error">${e.message}</div>`;
-    }
-    $('reg-submit').textContent = 'Register Patient';
+      await api('POST', '/patients', f);
+      toast(`Saved: ${f.full_name}`, 'success');
+      await loadRecent();
+      if (andAnother) clearForm(true);
+      else navigate('patient-search');
+    } catch(e) { toast(e.message, 'error'); }
   };
+
+  $('r-cancel').onclick    = () => clearForm(true);
+  $('r-save-only').onclick = () => save(false);
+  $('r-save-next').onclick = () => save(true);
+
+  async function loadRecent() {
+    try {
+      const { data } = await api('GET', '/patients?limit=6');
+      $('r-recent').innerHTML = data.length
+        ? data.map(p => `<div class="recent-item">
+            <div class="name">${escapeHtml(p.full_name)}</div>
+            <div class="meta">${escapeHtml(p.patient_ref)} · ${fmt(p.registered_at)}</div>
+          </div>`).join('')
+        : `<div class="empty" style="padding:24px"><p>No registrations yet</p></div>`;
+    } catch(e) { /* silent */ }
+  }
+  loadRecent();
 };
 
 /* ════════════════════════════════════════════════════════════════
-   PAGE: STOCK LEDGER
+   STOCK LEDGER (live filter)
 ════════════════════════════════════════════════════════════════ */
 PAGES['stock-ledger'] = async (el) => {
   const isAdmin = currentRole === 'Administrator';
   el.innerHTML = `
     <div class="page-header">
-      <div><h2>[ Stock Ledger View ]</h2><p>Medicines, supplies and equipment</p></div>
-      ${isAdmin ? '<button class="btn btn-accent" id="btn-add-item">+ Add Item</button>' : ''}
+      <div><h1>[ Stock Ledger ]</h1><p>Medicines, supplies and equipment</p></div>
+      ${isAdmin ? `<button class="btn btn-primary-accent" id="btn-add-item">+ Add Item</button>` : ''}
     </div>
     <div class="card">
       <div class="card-body">
-        <div class="search-bar">
-          <select id="inv-cat" style="padding:8px 10px;border:1.5px solid var(--gray-200);border-radius:var(--radius);font-size:12px;outline:none">
-            <option value="">All Categories</option>
+        <div class="row" style="margin-bottom:14px">
+          <div class="live-search" style="flex:1;margin:0">
+            <input id="inv-q" placeholder="Filter by name or code…">
+          </div>
+          <select id="inv-cat" style="flex:0;height:40px;padding:0 12px;border:1.5px solid var(--border);border-radius:var(--r);font-size:13px;outline:none;background:var(--surface)">
+            <option value="">All categories</option>
             <option value="medicine">Medicine</option>
             <option value="supply">Supply</option>
             <option value="equipment">Equipment</option>
             <option value="consumable">Consumable</option>
           </select>
-          <button class="btn btn-accent btn-sm" id="inv-load">Load</button>
         </div>
-        <div id="inv-table">Loading…</div>
+        <div id="inv-table">${skelRows(6)}</div>
       </div>
     </div>`;
 
-  const loadInv = async () => {
+  let allItems = [];
+
+  const renderTable = (items) => {
+    if (!items.length) {
+      $('inv-table').innerHTML = `<div class="empty">
+        <div class="icon">📦</div>
+        <p>No items found</p>
+        ${isAdmin ? `<button class="btn btn-primary-accent btn-sm" onclick="document.getElementById('btn-add-item').click()">+ Add First Item</button>` : ''}
+      </div>`;
+      return;
+    }
+    $('inv-table').innerHTML = `<div class="table-wrap"><table>
+      <thead><tr><th>Code</th><th>Item</th><th>Category</th><th>On hand</th><th>Unit</th><th>Reorder at</th><th>Location</th><th>Expiry</th><th></th></tr></thead>
+      <tbody>${items.map(i => {
+        const low = i.quantity_on_hand <= i.reorder_threshold;
+        return `<tr>
+          <td><span class="mono" style="font-size:12px">${escapeHtml(i.item_code)}</span></td>
+          <td><strong>${escapeHtml(i.item_name)}</strong></td>
+          <td>${badge(i.category,'teal')}</td>
+          <td>${badge(i.quantity_on_hand, low ? 'danger' : 'success')}</td>
+          <td class="text-mut">${escapeHtml(i.unit)}</td>
+          <td class="text-mut">${i.reorder_threshold}</td>
+          <td class="text-mut">${escapeHtml(i.location||'—')}</td>
+          <td class="text-mut">${i.expiry_date ? fmtDateOnly(i.expiry_date) : '—'}</td>
+          <td><button class="btn btn-xs btn-ghost" onclick="openTxnModal(${i.id},'${escapeHtml(i.item_name).replace(/'/g,'&apos;')}',reloadInventory)">Transact</button></td>
+        </tr>`;
+      }).join('')}</tbody></table></div>`;
+  };
+
+  window.reloadInventory = async () => {
     const cat = $('inv-cat').value;
     try {
       const { data } = await api('GET', `/inventory${cat ? `?category=${cat}` : ''}`);
-      if (!data.length) { $('inv-table').innerHTML = '<div class="empty-state"><div class="icon">📦</div><p>No items found</p></div>'; return; }
-      $('inv-table').innerHTML = `<table>
-        <thead><tr><th>Code</th><th>Item</th><th>Cat</th><th>Qty</th><th>Unit</th><th>Threshold</th><th>Location</th><th>Expiry</th><th></th></tr></thead>
-        <tbody>${data.map(i => {
-          const low = i.quantity_on_hand <= i.reorder_threshold;
-          return `<tr>
-            <td>${badge(i.item_code,'gray')}</td>
-            <td><strong>${i.item_name}</strong></td>
-            <td>${badge(i.category,'blue')}</td>
-            <td>${badge(i.quantity_on_hand, low ? 'red' : 'green')}</td>
-            <td>${i.unit}</td>
-            <td>${i.reorder_threshold}</td>
-            <td>${i.location||'—'}</td>
-            <td>${i.expiry_date||'—'}</td>
-            <td><button class="btn btn-xs btn-ghost" onclick="openTxnModal(${i.id},'${i.item_name.replace(/'/g,"\\'")}',${loadInv})">Transact</button></td>
-          </tr>`;
-        }).join('')}</tbody>
-      </table>`;
-    } catch(e) { $('inv-table').innerHTML = `<div class="alert-strip error">${e.message}</div>`; }
+      allItems = data;
+      filterAndRender();
+    } catch(e) { $('inv-table').innerHTML = `<div class="alert alert-error">${escapeHtml(e.message)}</div>`; }
   };
 
-  $('inv-load').onclick = loadInv;
-  $('inv-cat').onchange  = loadInv;
-  loadInv();
+  const filterAndRender = () => {
+    const q = $('inv-q').value.toLowerCase().trim();
+    const items = q
+      ? allItems.filter(i => i.item_name.toLowerCase().includes(q) || i.item_code.toLowerCase().includes(q))
+      : allItems;
+    renderTable(items);
+  };
+
+  $('inv-q').oninput = debounce(filterAndRender, 200);
+  $('inv-cat').onchange = reloadInventory;
+  reloadInventory();
 
   if (isAdmin) {
-    $('btn-add-item').onclick = () => {
-      openModal('Add Inventory Item', `
-        <div class="form-grid">
-          <div class="form-group"><label>Item Code *</label><input id="ni-code" placeholder="MED-001"></div>
-          <div class="form-group"><label>Item Name *</label><input id="ni-name" placeholder="Paracetamol 500mg"></div>
-          <div class="form-group"><label>Category *</label>
-            <select id="ni-cat"><option value="medicine">Medicine</option><option value="supply">Supply</option><option value="equipment">Equipment</option><option value="consumable">Consumable</option></select>
-          </div>
-          <div class="form-group"><label>Unit *</label><input id="ni-unit" placeholder="tablet / vial / box"></div>
-          <div class="form-group"><label>Initial Qty</label><input id="ni-qty" type="number" value="0" min="0"></div>
-          <div class="form-group"><label>Reorder At</label><input id="ni-reorder" type="number" value="10" min="0"></div>
-          <div class="form-group"><label>Location</label><input id="ni-loc" placeholder="Ward A / Shelf 3"></div>
-          <div class="form-group"><label>Expiry Date</label><input id="ni-expiry" type="date"></div>
-        </div>
-        <div class="form-actions">
-          <button class="btn btn-ghost" onclick="closeModal()">Cancel</button>
-          <button class="btn btn-accent" id="save-item-btn">Add Item</button>
-        </div>`);
-      $('save-item-btn').onclick = async () => {
-        try {
-          await api('POST', '/inventory', {
-            item_code: $('ni-code').value, item_name: $('ni-name').value,
-            category: $('ni-cat').value,  unit: $('ni-unit').value,
-            quantity_on_hand: +$('ni-qty').value, reorder_threshold: +$('ni-reorder').value,
-            location: $('ni-loc').value,  expiry_date: $('ni-expiry').value || null,
-          });
-          closeModal(); loadInv();
-        } catch(e) { alert(e.message); }
-      };
-    };
+    $('btn-add-item').onclick = () => openAddItemModal(reloadInventory);
   }
 };
 
-window.openTxnModal = (id, name) => {
+function openAddItemModal(onSaved) {
+  openModal('Add Inventory Item', `
+    <div class="form-grid">
+      <div class="form-group"><label>Item Code <span class="req">*</span></label><input id="ni-code" placeholder="MED-001"></div>
+      <div class="form-group"><label>Item Name <span class="req">*</span></label><input id="ni-name" placeholder="Paracetamol 500mg"></div>
+      <div class="form-group"><label>Category <span class="req">*</span></label>
+        <select id="ni-cat">
+          <option value="medicine">Medicine</option>
+          <option value="supply">Supply</option>
+          <option value="equipment">Equipment</option>
+          <option value="consumable">Consumable</option>
+        </select>
+      </div>
+      <div class="form-group"><label>Unit <span class="req">*</span></label><input id="ni-unit" placeholder="tablet / vial / box"></div>
+      <div class="form-group"><label>Initial Quantity</label><input id="ni-qty" type="number" value="0" min="0"></div>
+      <div class="form-group"><label>Reorder At</label><input id="ni-reorder" type="number" value="10" min="0"></div>
+      <div class="form-group"><label>Location</label><input id="ni-loc" placeholder="Ward A / Shelf 3"></div>
+      <div class="form-group"><label>Expiry Date</label><input id="ni-expiry" type="date"></div>
+    </div>
+    <div class="form-actions">
+      <button class="btn btn-ghost" onclick="closeModal()">Cancel</button>
+      <button class="btn btn-primary-accent" id="save-item">Add Item</button>
+    </div>`);
+  $('save-item').onclick = async () => {
+    try {
+      await api('POST', '/inventory', {
+        item_code: $('ni-code').value, item_name: $('ni-name').value,
+        category:  $('ni-cat').value,  unit: $('ni-unit').value,
+        quantity_on_hand:  +$('ni-qty').value,
+        reorder_threshold: +$('ni-reorder').value,
+        location:    $('ni-loc').value,
+        expiry_date: $('ni-expiry').value || null,
+      });
+      toast('Item added', 'success');
+      closeModal();
+      if (onSaved) onSaved();
+    } catch(e) { toast(e.message, 'error'); }
+  };
+}
+
+window.openTxnModal = (id, name, onSaved) => {
   openModal(`Record Transaction — ${name}`, `
     <div class="form-grid">
-      <div class="form-group"><label>Type *</label>
+      <div class="form-group"><label>Type <span class="req">*</span></label>
         <select id="txn-type">
           <option value="restock">Restock (+)</option>
           <option value="dispense">Dispense (−)</option>
@@ -807,17 +920,17 @@ window.openTxnModal = (id, name) => {
           <option value="expired">Mark Expired (−)</option>
         </select>
       </div>
-      <div class="form-group"><label>Quantity *</label><input id="txn-qty" type="number" min="1" value="1"></div>
-      <div class="form-group full"><label>Performed By *</label>
-        <input id="txn-by" value="${$('user-name')?.textContent||''}">
+      <div class="form-group"><label>Quantity <span class="req">*</span></label><input id="txn-qty" type="number" min="1" value="1"></div>
+      <div class="form-group full"><label>Performed by <span class="req">*</span></label>
+        <input id="txn-by" value="${escapeHtml(currentUser||'')}">
       </div>
       <div class="form-group full"><label>Notes</label><input id="txn-notes" placeholder="Optional"></div>
     </div>
     <div class="form-actions">
       <button class="btn btn-ghost" onclick="closeModal()">Cancel</button>
-      <button class="btn btn-accent" id="save-txn-btn">Record</button>
+      <button class="btn btn-primary-accent" id="save-txn">Record</button>
     </div>`);
-  $('save-txn-btn').onclick = async () => {
+  $('save-txn').onclick = async () => {
     const type = $('txn-type').value;
     const rawQty = +$('txn-qty').value;
     const delta = (type === 'dispense' || type === 'expired') ? -rawQty : rawQty;
@@ -826,60 +939,61 @@ window.openTxnModal = (id, name) => {
         txn_type: type, quantity_delta: delta,
         performed_by: $('txn-by').value, notes: $('txn-notes').value,
       });
+      toast('Transaction recorded', 'success');
       closeModal();
-      if (currentPage === 'stock-ledger') navigate('stock-ledger');
-    } catch(e) { alert(e.message); }
+      if (onSaved) onSaved();
+    } catch(e) { toast(e.message, 'error'); }
   };
 };
 
 /* ════════════════════════════════════════════════════════════════
-   PAGE: LOW STOCK ALERTS (Admin only)
+   LOW STOCK (Admin only)
 ════════════════════════════════════════════════════════════════ */
 PAGES['low-stock'] = async (el) => {
   el.innerHTML = `
     <div class="page-header">
-      <div><h2>[ Low Inventory Alert Dashboard ]</h2><p>Items at or below reorder threshold</p></div>
-      <button class="btn btn-ghost btn-sm" onclick="navigate('low-stock')">↻ Refresh</button>
+      <div><h1>[ Low Stock Alerts ]</h1><p>Items at or below their reorder threshold</p></div>
+      <button class="btn btn-secondary btn-sm" onclick="navigate('low-stock')">↻ Refresh</button>
     </div>
-    <div id="ls-content">Loading…</div>`;
+    <div id="ls-content">${skelRows(6)}</div>`;
   try {
     const { data, alert_count } = await api('GET', '/inventory/alerts/low-stock');
     if (!data.length) {
-      $('ls-content').innerHTML = '<div class="empty-state card" style="padding:40px"><div class="icon">✅</div><p>All stock levels are above threshold</p></div>';
+      $('ls-content').innerHTML = `<div class="card"><div class="empty">
+        <div class="icon">✅</div><p>All stock levels are above their threshold</p>
+      </div></div>`;
       return;
     }
     $('ls-content').innerHTML = `
-      <div class="alert-strip warn">⚠️ ${alert_count} item${alert_count!==1?'s':''} need restocking</div>
-      <div class="card"><table>
-        <thead><tr><th>Code</th><th>Item</th><th>Category</th><th>On Hand</th><th>Threshold</th><th>Deficit</th><th>Location</th></tr></thead>
+      <div class="alert alert-warn">⚠️ ${alert_count} item${alert_count!==1?'s':''} need${alert_count===1?'s':''} restocking</div>
+      <div class="card"><div class="table-wrap"><table>
+        <thead><tr><th>Code</th><th>Item</th><th>Category</th><th>On hand</th><th>Threshold</th><th>Deficit</th><th>Location</th></tr></thead>
         <tbody>${data.map(i => `<tr>
-          <td>${badge(i.item_code,'gray')}</td>
-          <td><strong>${i.item_name}</strong></td>
-          <td>${badge(i.category,'blue')}</td>
-          <td>${badge(i.quantity_on_hand,'red')}</td>
+          <td><span class="mono" style="font-size:12px">${escapeHtml(i.item_code)}</span></td>
+          <td><strong>${escapeHtml(i.item_name)}</strong></td>
+          <td>${badge(i.category,'teal')}</td>
+          <td>${badge(i.quantity_on_hand,'danger')}</td>
           <td>${i.reorder_threshold}</td>
-          <td>${badge(i.reorder_threshold - i.quantity_on_hand,'orange')}</td>
-          <td>${i.location||'—'}</td>
+          <td>${badge(i.reorder_threshold - i.quantity_on_hand,'warning')}</td>
+          <td class="text-mut">${escapeHtml(i.location||'—')}</td>
         </tr>`).join('')}</tbody>
-      </table></div>`;
-  } catch(e) { $('ls-content').innerHTML = `<div class="alert-strip error">${e.message}</div>`; }
+      </table></div></div>`;
+  } catch(e) { $('ls-content').innerHTML = `<div class="alert alert-error">${escapeHtml(e.message)}</div>`; }
 };
 
 /* ════════════════════════════════════════════════════════════════
-   PAGE: TRIAGE QUEUE (shared — all roles)
+   TRIAGE QUEUE
 ════════════════════════════════════════════════════════════════ */
 PAGES['triage-queue'] = async (el) => {
   el.innerHTML = `
     <div class="page-header">
-      <div><h2>[ Triage Priority Queue ]</h2><p>Sorted by severity then arrival time</p></div>
-      <div style="display:flex;gap:8px">
-        <button class="btn btn-ghost btn-sm" onclick="navigate('triage-queue')">↻ Refresh</button>
-        <button class="btn btn-accent" id="tq-add-btn">+ Add to Queue</button>
+      <div><h1>[ Triage Priority Queue ]</h1><p>Sorted by severity, then arrival time</p></div>
+      <div class="page-actions">
+        <button class="btn btn-secondary btn-sm" onclick="navigate('triage-queue')">↻ Refresh</button>
+        <button class="btn btn-primary-accent" onclick="showEnqueueModal(()=>navigate('triage-queue'))">+ Add to Queue</button>
       </div>
     </div>
-    <div id="tq-content">Loading…</div>`;
-
-  $('tq-add-btn').onclick = () => showEnqueueModal(() => navigate('triage-queue'));
+    <div id="tq-content">${skelRows(6)}</div>`;
   await loadFullQueue();
 };
 
@@ -888,38 +1002,51 @@ async function loadFullQueue() {
   if (!el) return;
   try {
     const { data } = await api('GET', '/queue?status=waiting');
-    if (!data.length) { el.innerHTML = '<div class="empty-state card" style="padding:40px"><div class="icon">🚑</div><p>No patients in queue</p></div>'; return; }
-    const labels = {1:'Immediate',2:'Emergent',3:'Urgent',4:'Semi-Urgent',5:'Non-Urgent'};
-    el.innerHTML = `<div class="card"><table>
-      <thead><tr><th>Triage</th><th>Patient</th><th>Complaint</th><th>Assigned To</th><th>Queued</th><th></th></tr></thead>
-      <tbody>${data.map(r => `
-        <tr class="triage-${r.triage_level}">
-          <td><strong>T${r.triage_level}</strong><br><span style="font-size:10px;color:var(--gray-600)">${labels[r.triage_level]}</span></td>
-          <td><strong>${r.full_name||'—'}</strong><br><span style="font-size:10px;color:var(--gray-600)">${r.patient_ref||''}</span></td>
-          <td>${r.chief_complaint}</td>
-          <td>${r.assigned_to||badge('Unassigned','orange')}</td>
-          <td style="font-size:11px">${fmt(r.queued_at)}</td>
-          <td style="white-space:nowrap">
-            <button class="btn btn-xs btn-accent" onclick="resolveQueue(${r.id})">Done</button>
-          </td>
-        </tr>`).join('')}
-      </tbody>
-    </table></div>`;
-  } catch(e) { el.innerHTML = `<div class="alert-strip error">${e.message}</div>`; }
+    if (!data.length) {
+      el.innerHTML = `<div class="card"><div class="empty">
+        <div class="icon">🚑</div><p>No patients in queue</p>
+        <button class="btn btn-primary-accent btn-sm" onclick="showEnqueueModal(()=>navigate('triage-queue'))">+ Add First Patient</button>
+      </div></div>`;
+      return;
+    }
+    const labels = { 1:'Immediate', 2:'Emergent', 3:'Urgent', 4:'Semi-Urgent', 5:'Non-Urgent' };
+    el.innerHTML = `<div class="card"><div class="table-wrap"><table>
+      <thead><tr><th>Triage</th><th>Patient</th><th>Complaint</th><th>Assigned</th><th>Queued</th><th></th></tr></thead>
+      <tbody>${data.map(r => `<tr class="tri-${r.triage_level} tri">
+        <td>
+          <span class="tri-num t${r.triage_level}">T${r.triage_level}</span>
+          <div style="font-size:10px;color:var(--text-mut);margin-top:3px">${labels[r.triage_level]}</div>
+        </td>
+        <td><strong>${escapeHtml(r.full_name||'—')}</strong>
+          <div style="font-size:11px;color:var(--text-mut)">${escapeHtml(r.patient_ref||'')}</div></td>
+        <td>${escapeHtml(r.chief_complaint)}</td>
+        <td>${r.assigned_to ? badge(r.assigned_to,'indigo') : badge('Unassigned','gray')}</td>
+        <td class="text-mut" style="font-size:11px">${fmt(r.queued_at)}</td>
+        <td><button class="btn btn-xs btn-primary-accent" onclick="resolveQueue(${r.id})">Mark Done</button></td>
+      </tr>`).join('')}</tbody>
+    </table></div></div>`;
+  } catch(e) { el.innerHTML = `<div class="alert alert-error">${escapeHtml(e.message)}</div>`; }
 }
 
 window.resolveQueue = async (id) => {
-  try { await api('PATCH', `/queue/${id}`, { status: 'completed' }); loadFullQueue(); }
-  catch(e) { alert(e.message); }
+  try {
+    await api('PATCH', `/queue/${id}`, { status: 'completed' });
+    toast('Marked as done', 'success');
+    if (currentPage === 'dashboard') {
+      if (currentRole === 'Doctor') loadDoctorQueue();
+      else if (currentRole === 'Nurse') loadNurseData();
+      else navigate('dashboard');
+    } else navigate('triage-queue');
+  } catch(e) { toast(e.message, 'error'); }
 };
 
-function showEnqueueModal(onSuccess) {
-  openModal('Add to [ Triage Priority Queue ]', `
+window.showEnqueueModal = (onSuccess) => {
+  openModal('Add to [ Triage Queue ]', `
     <div class="form-grid">
-      <div class="form-group full"><label>Patient Reference *</label>
-        <input id="eq-ref" placeholder="e.g. PAT-001">
+      <div class="form-group full"><label>Patient Reference <span class="req">*</span></label>
+        <input id="eq-ref" placeholder="e.g. PAT-2024-001">
       </div>
-      <div class="form-group"><label>Triage Level *</label>
+      <div class="form-group"><label>Triage Level <span class="req">*</span></label>
         <select id="eq-level">
           <option value="1">T1 — Immediate</option>
           <option value="2">T2 — Emergent</option>
@@ -928,90 +1055,100 @@ function showEnqueueModal(onSuccess) {
           <option value="5">T5 — Non-Urgent</option>
         </select>
       </div>
-      <div class="form-group"><label>Assign To</label>
-        <input id="eq-assign" placeholder="Doctor / Nurse name">
+      <div class="form-group"><label>Assign to</label>
+        <input id="eq-assign" placeholder="Doctor / Nurse name" value="${currentRole==='Doctor' ? escapeHtml(currentUser||'') : ''}">
       </div>
-      <div class="form-group full"><label>Chief Complaint *</label>
+      <div class="form-group full"><label>Chief Complaint <span class="req">*</span></label>
         <textarea id="eq-complaint" rows="2" placeholder="Presenting complaint…"></textarea>
       </div>
     </div>
     <div class="form-actions">
       <button class="btn btn-ghost" onclick="closeModal()">Cancel</button>
-      <button class="btn btn-accent" id="eq-save">Add to Queue</button>
+      <button class="btn btn-primary-accent" id="eq-save">Add</button>
     </div>`);
-
   $('eq-save').onclick = async () => {
     const ref = $('eq-ref').value.trim();
-    if (!ref) { alert('Enter a patient reference'); return; }
+    if (!ref) { toast('Enter a patient reference', 'warning'); return; }
     try {
       const { data } = await api('GET', `/patients?q=${encodeURIComponent(ref)}&limit=1`);
-      if (!data.length) { alert('No patient found with that reference'); return; }
+      if (!data.length) { toast('No patient with that reference', 'warning'); return; }
       await api('POST', '/queue', {
         patient_id:      data[0].id,
         triage_level:    +$('eq-level').value,
         chief_complaint: $('eq-complaint').value,
         assigned_to:     $('eq-assign').value || null,
       });
+      toast('Added to queue', 'success');
       closeModal();
-      if (typeof onSuccess === 'function') onSuccess();
-    } catch(e) { alert(e.message); }
+      if (onSuccess) onSuccess();
+    } catch(e) { toast(e.message, 'error'); }
   };
-}
+};
 
 /* ════════════════════════════════════════════════════════════════
-   PAGE: STAFF ROSTER
+   STAFF ROSTER
 ════════════════════════════════════════════════════════════════ */
 PAGES['staff-roster'] = async (el) => {
   el.innerHTML = `
     <div class="page-header">
-      <div><h2>[ Staff Duty Roster ]</h2><p>Currently on-duty clinical staff</p></div>
-      <button class="btn btn-accent" id="btn-add-staff">+ Add Shift</button>
+      <div><h1>[ Staff Duty Roster ]</h1><p>Currently on-duty clinical staff</p></div>
+      <button class="btn btn-primary-accent" id="add-shift">+ Add Shift</button>
     </div>
-    <div id="roster-content">Loading…</div>`;
-  $('btn-add-staff').onclick = () => showAddShiftModal(() => loadRosterPage());
+    <div id="roster">${skelRows(5)}</div>`;
+  $('add-shift').onclick = () => showAddShiftModal(loadRosterPage);
   loadRosterPage();
 };
 
 async function loadRosterPage() {
-  const el = $('roster-content');
+  const el = $('roster');
   if (!el) return;
   try {
     const { data } = await api('GET', '/queue/roster');
-    if (!data.length) { el.innerHTML = '<div class="empty-state card" style="padding:40px"><div class="icon">👥</div><p>No staff currently on duty</p></div>'; return; }
-    el.innerHTML = `<div class="card"><table>
+    if (!data.length) {
+      el.innerHTML = `<div class="card"><div class="empty">
+        <div class="icon">👥</div><p>No staff currently on duty</p>
+        <button class="btn btn-primary-accent btn-sm" onclick="showAddShiftModal(loadRosterPage)">+ Add First Shift</button>
+      </div></div>`;
+      return;
+    }
+    el.innerHTML = `<div class="card"><div class="table-wrap"><table>
       <thead><tr><th>Name</th><th>Role</th><th>Ward</th><th>Shift Start</th><th>Shift End</th></tr></thead>
       <tbody>${data.map(s => `<tr>
-        <td><strong>${s.staff_name}</strong></td>
-        <td>${badge(s.role,'blue')}</td>
-        <td>${s.ward||'—'}</td>
+        <td><strong>${escapeHtml(s.staff_name)}</strong></td>
+        <td>${badge(s.role,'teal')}</td>
+        <td class="text-mut">${escapeHtml(s.ward||'—')}</td>
         <td>${fmt(s.shift_start)}</td>
         <td>${fmt(s.shift_end)}</td>
-      </tr>`).join('')}</tbody>
-    </table></div>`;
-  } catch(e) { el.innerHTML = `<div class="alert-strip error">${e.message}</div>`; }
+      </tr>`).join('')}</tbody></table></div></div>`;
+  } catch(e) { el.innerHTML = `<div class="alert alert-error">${escapeHtml(e.message)}</div>`; }
 }
 
-function showAddShiftModal(onSuccess) {
+window.showAddShiftModal = (onSuccess) => {
   const now = new Date();
   const pad = n => String(n).padStart(2,'0');
   const local = `${now.getFullYear()}-${pad(now.getMonth()+1)}-${pad(now.getDate())}T${pad(now.getHours())}:${pad(now.getMinutes())}`;
+  const end = new Date(now.getTime() + 8*3600*1000);
+  const endLocal = `${end.getFullYear()}-${pad(end.getMonth()+1)}-${pad(end.getDate())}T${pad(end.getHours())}:${pad(end.getMinutes())}`;
+
   openModal('Add Staff Shift', `
     <div class="form-grid">
-      <div class="form-group"><label>Staff Name *</label><input id="sr-name" placeholder="Full name"></div>
-      <div class="form-group"><label>Role *</label>
+      <div class="form-group"><label>Staff Name <span class="req">*</span></label><input id="sr-name" placeholder="Full name" value="${currentRole!=='Administrator' ? escapeHtml(currentUser||'') : ''}"></div>
+      <div class="form-group"><label>Role <span class="req">*</span></label>
         <select id="sr-role">
-          <option value="doctor">Doctor</option><option value="nurse">Nurse</option>
-          <option value="technician">Technician</option><option value="pharmacist">Pharmacist</option>
+          <option value="doctor">Doctor</option>
+          <option value="nurse" ${currentRole==='Nurse'?'selected':''}>Nurse</option>
+          <option value="technician">Technician</option>
+          <option value="pharmacist">Pharmacist</option>
           <option value="admin">Admin</option>
         </select>
       </div>
-      <div class="form-group"><label>Shift Start *</label><input id="sr-start" type="datetime-local" value="${local}"></div>
-      <div class="form-group"><label>Shift End *</label><input id="sr-end" type="datetime-local"></div>
+      <div class="form-group"><label>Shift Start <span class="req">*</span></label><input id="sr-start" type="datetime-local" value="${local}"></div>
+      <div class="form-group"><label>Shift End <span class="req">*</span></label><input id="sr-end" type="datetime-local" value="${endLocal}"></div>
       <div class="form-group full"><label>Ward</label><input id="sr-ward" placeholder="Ward / Department"></div>
     </div>
     <div class="form-actions">
       <button class="btn btn-ghost" onclick="closeModal()">Cancel</button>
-      <button class="btn btn-accent" id="sr-save">Add to Roster</button>
+      <button class="btn btn-primary-accent" id="sr-save">Add to Roster</button>
     </div>`);
   $('sr-save').onclick = async () => {
     try {
@@ -1021,40 +1158,37 @@ function showAddShiftModal(onSuccess) {
         shift_end:   new Date($('sr-end').value).toISOString(),
         ward:        $('sr-ward').value,
       });
+      toast('Shift added', 'success');
       closeModal();
-      if (typeof onSuccess === 'function') onSuccess();
-    } catch(e) { alert(e.message); }
+      if (onSuccess) onSuccess();
+    } catch(e) { toast(e.message, 'error'); }
   };
-}
+};
 
 /* ════════════════════════════════════════════════════════════════
-   PAGE: DOCUMENT LIBRARY
+   DOCUMENT LIBRARY
 ════════════════════════════════════════════════════════════════ */
 PAGES['doc-library'] = (el) => {
   el.innerHTML = `
     <div class="page-header">
-      <div><h2>[ Document Library Browser ]</h2><p>Offline clinical guidelines, SOPs and calculators</p></div>
+      <div><h1>[ Document Library ]</h1><p>Offline clinical guidelines, SOPs and calculators</p></div>
     </div>
-    <div class="card">
+    <div class="card" style="margin-bottom:20px">
       <div class="card-body">
-        <div class="alert-strip info" style="margin-bottom:16px">
-          📚 Documents are stored locally. Load guidelines via <code style="background:var(--gray-100);padding:1px 5px;border-radius:3px">POST /api/documents</code>
-        </div>
-        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:12px">
-          ${[['📋','Clinical Guidelines','Standard treatment protocols'],
-             ['💊','Drug References','Dosage and interactions'],
-             ['🔬','Lab Reference','Normal value ranges'],
-             ['🧮','[ Interactive Calculator ]','BMI, GFR, drug dose'],
-             ['📄','SOPs','Standard operating procedures'],
-             ['🩺','Triage Protocols','Emergency decision guides'],
-            ].map(([icon,title,desc]) => `
-            <div style="border:1.5px solid var(--gray-200);border-radius:var(--radius);padding:14px;cursor:pointer;transition:border-color .15s"
-                 onmouseover="this.style.borderColor='var(--accent)'"
-                 onmouseout="this.style.borderColor='var(--gray-200)'">
-              <div style="font-size:24px;margin-bottom:7px">${icon}</div>
-              <div style="font-weight:600;font-size:12px">${title}</div>
-              <div style="font-size:11px;color:var(--gray-600);margin-top:2px">${desc}</div>
-            </div>`).join('')}
+        <div class="alert alert-info">📚 Documents are stored locally on the Pi. Load guidelines via <code>POST /api/documents</code>.</div>
+        <div class="doc-grid" style="margin-top:16px">
+          ${[
+            ['📋','Clinical Guidelines','Standard treatment protocols'],
+            ['💊','Drug References','Dosage and interactions'],
+            ['🔬','Lab Reference','Normal value ranges'],
+            ['🧮','[ Calculator ]','BMI, GFR, drug dose'],
+            ['📄','SOPs','Standard operating procedures'],
+            ['🩺','Triage Protocols','Emergency decision guides'],
+          ].map(([i,t,d]) => `<div class="doc-tile">
+            <div class="ico">${i}</div>
+            <div class="ttl">${escapeHtml(t)}</div>
+            <div class="dsc">${escapeHtml(d)}</div>
+          </div>`).join('')}
         </div>
       </div>
     </div>`;
