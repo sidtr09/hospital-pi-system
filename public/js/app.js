@@ -4,6 +4,8 @@
    UTILITIES
 ════════════════════════════════════════════════════════════════ */
 const $ = id => document.getElementById(id);
+const setText = (id, val) => { const e = $(id); if (e) e.textContent = val; };
+const setHTML = (id, val) => { const e = $(id); if (e) e.innerHTML  = val; };
 const escapeHtml = s => String(s ?? '').replace(/[&<>"']/g, c =>
   ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
 
@@ -121,14 +123,15 @@ let currentPage = null;
 /* ════════════════════════════════════════════════════════════════
    CLOCK
 ════════════════════════════════════════════════════════════════ */
+let _clockTimer = null;
 function startClock() {
-  const el = $('clock');
+  if (_clockTimer) clearInterval(_clockTimer);
   const tick = () => {
-    el.textContent = new Date().toLocaleTimeString('en-GB',
+    setText('clock', new Date().toLocaleTimeString('en-GB',
       { weekday: 'short', day: '2-digit', month: 'short',
-        hour: '2-digit', minute: '2-digit' });
+        hour: '2-digit', minute: '2-digit' }));
   };
-  tick(); setInterval(tick, 30000);
+  tick(); _clockTimer = setInterval(tick, 30000);
 }
 
 /* ════════════════════════════════════════════════════════════════
@@ -296,35 +299,35 @@ async function renderAdminDashboard(el) {
     fetch('/api/health').then(r => r.json()),
   ]);
 
-  if (pAll.status==='fulfilled') $('ad-0').textContent = pAll.value.count ?? 0;
+  if (pAll.status==='fulfilled') setText('ad-0', pAll.value.count ?? 0);
   if (q.status==='fulfilled') {
     const rows = q.value.data || [];
-    $('ad-1').textContent = rows.length;
-    $('ad-queue').innerHTML = rows.length ? `<div class="table-wrap"><table>
+    setText('ad-1', rows.length);
+    setHTML('ad-queue', rows.length ? `<div class="table-wrap"><table>
       <thead><tr><th>Lvl</th><th>Patient</th><th>Complaint</th></tr></thead>
       <tbody>${rows.slice(0,5).map(r => `<tr class="tri-${r.triage_level} tri">
         <td><span class="tri-num t${r.triage_level}">T${r.triage_level}</span></td>
         <td>${escapeHtml(r.full_name||'—')}</td>
         <td class="ellipsis" style="max-width:180px">${escapeHtml(r.chief_complaint)}</td>
       </tr>`).join('')}</tbody></table></div>`
-      : `<div class="empty"><div class="icon">✅</div><p>Queue is clear</p></div>`;
+      : `<div class="empty"><div class="icon">✅</div><p>Queue is clear</p></div>`);
   }
   if (ls.status==='fulfilled') {
-    $('ad-2').textContent = ls.value.alert_count ?? 0;
+    setText('ad-2', ls.value.alert_count ?? 0);
     const items = ls.value.data || [];
-    $('ad-stock').innerHTML = items.length ? `<div class="table-wrap"><table>
+    setHTML('ad-stock', items.length ? `<div class="table-wrap"><table>
       <thead><tr><th>Item</th><th>On hand</th><th>Threshold</th></tr></thead>
       <tbody>${items.slice(0,5).map(i => `<tr>
         <td>${escapeHtml(i.item_name)}</td>
         <td>${badge(i.quantity_on_hand,'danger')}</td>
         <td>${i.reorder_threshold}</td>
       </tr>`).join('')}</tbody></table></div>`
-      : `<div class="empty"><div class="icon">✅</div><p>All stock above threshold</p></div>`;
+      : `<div class="empty"><div class="icon">✅</div><p>All stock above threshold</p></div>`);
   }
-  if (st.status==='fulfilled') $('ad-3').textContent = st.value.data?.length ?? 0;
+  if (st.status==='fulfilled') setText('ad-3', st.value.data?.length ?? 0);
   if (h.status==='fulfilled') {
     const v = h.value;
-    $('ad-health').innerHTML = `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:16px">
+    setHTML('ad-health', `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:16px">
       ${[['Status', v.status, 'color:var(--success);'],
          ['Uptime', `${Math.floor(v.uptime_s/3600)}h ${Math.floor((v.uptime_s%3600)/60)}m`, ''],
          ['RAM Used', `${v.memory.rss_mb} MB`, ''],
@@ -334,7 +337,7 @@ async function renderAdminDashboard(el) {
           <div style="font-size:11px;color:var(--text-mut);text-transform:uppercase;letter-spacing:.5px">${lbl}</div>
           <div style="font-size:16px;font-weight:700;margin-top:3px;${sty}">${val}</div>
         </div>`).join('')}
-    </div>`;
+    </div>`);
   }
 }
 
@@ -375,12 +378,12 @@ async function renderDoctorDashboard(el) {
   await loadDoctorQueue();
 
   const lookup = debounce(async () => {
+    if (!$('dd-lookup') || !$('dd-lookup-result')) return;
     const q = $('dd-lookup').value.trim();
-    const out = $('dd-lookup-result');
-    if (!q) { out.innerHTML = '<div class="text-faint" style="font-size:12px;padding:8px 0">Type to find a patient — they\'ll appear here</div>'; return; }
+    if (!q) { setHTML('dd-lookup-result', '<div class="text-faint" style="font-size:12px;padding:8px 0">Type to find a patient — they\'ll appear here</div>'); return; }
     try {
       const { data } = await api('GET', `/patients?q=${encodeURIComponent(q)}&limit=6`);
-      out.innerHTML = data.length ? data.map(p => `
+      setHTML('dd-lookup-result', data.length ? data.map(p => `
         <div class="recent-item" style="display:flex;justify-content:space-between;align-items:center;gap:8px">
           <div style="flex:1;min-width:0">
             <div class="name ellipsis">${escapeHtml(p.full_name)}</div>
@@ -388,8 +391,8 @@ async function renderDoctorDashboard(el) {
           </div>
           <button class="btn btn-xs btn-primary-accent" onclick="viewNotes(${p.id},'${escapeHtml(p.full_name).replace(/'/g,'&apos;')}')">📋 Notes</button>
         </div>`).join('')
-        : '<div class="empty" style="padding:24px"><p>No patients found</p></div>';
-    } catch(e) { out.innerHTML = `<div class="alert alert-error">${escapeHtml(e.message)}</div>`; }
+        : '<div class="empty" style="padding:24px"><p>No patients found</p></div>');
+    } catch(e) { setHTML('dd-lookup-result', `<div class="alert alert-error">${escapeHtml(e.message)}</div>`); }
   });
   $('dd-lookup').oninput = lookup;
 }
@@ -572,18 +575,19 @@ PAGES['patient-search'] = async (el) => {
     </div>`;
 
   const run = debounce(async () => {
+    if (!$('ps-input')) return;
     const q = $('ps-input').value;
     try {
       const { data } = await api('GET', `/patients?q=${encodeURIComponent(q)}&limit=50`);
       if (!data.length) {
-        $('ps-results').innerHTML = `<div class="empty">
+        setHTML('ps-results', `<div class="empty">
           <div class="icon">👤</div>
           <p>No patients ${q ? 'match this search' : 'registered yet'}</p>
           ${canRegister ? `<button class="btn btn-primary-accent btn-sm" onclick="navigate('patient-register')">+ Register First Patient</button>` : ''}
-        </div>`;
+        </div>`);
         return;
       }
-      $('ps-results').innerHTML = `<div class="table-wrap"><table>
+      setHTML('ps-results', `<div class="table-wrap"><table>
         <thead><tr><th>Reference</th><th>Name</th><th>DOB</th><th>Blood</th><th>Registered</th><th></th></tr></thead>
         <tbody>${data.map(p => `<tr>
           <td><span class="mono" style="font-size:12px">${escapeHtml(p.patient_ref)}</span></td>
@@ -592,8 +596,8 @@ PAGES['patient-search'] = async (el) => {
           <td>${p.blood_group ? badge(p.blood_group,'danger') : '<span class="text-faint">—</span>'}</td>
           <td class="text-mut">${fmt(p.registered_at)}</td>
           <td><button class="btn btn-xs btn-ghost" onclick="viewNotes(${p.id},'${escapeHtml(p.full_name).replace(/'/g,'&apos;')}')">📋 Notes</button></td>
-        </tr>`).join('')}</tbody></table></div>`;
-    } catch(e) { $('ps-results').innerHTML = `<div class="alert alert-error">${escapeHtml(e.message)}</div>`; }
+        </tr>`).join('')}</tbody></table></div>`);
+    } catch(e) { setHTML('ps-results', `<div class="alert alert-error">${escapeHtml(e.message)}</div>`); }
   });
   $('ps-input').oninput = run;
   run();
