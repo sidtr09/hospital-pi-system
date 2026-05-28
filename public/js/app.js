@@ -146,33 +146,67 @@ async function loadPendingApprovals(toastOnNew = false) {
     card.style.display = 'block';
     setText('ad-pending-count', `${count} pending`);
     setHTML('ad-pending-list', data.map(u => `
-      <div class="pending-request">
+      <div class="pending-request" data-row-id="${u.id}">
         <div class="rail-avatar" style="width:32px;height:32px;font-size:12px;margin:0;background:#fd7e14">${escapeHtml((u.full_name||'?').charAt(0).toUpperCase())}</div>
         <div class="who">
           <div class="nm">${escapeHtml(u.full_name)} <span style="font-weight:400;color:var(--text-mut)">· @${escapeHtml(u.username)}</span></div>
           <div class="mt">Requested role: <strong>${escapeHtml(u.role)}</strong> · ${fmt(u.requested_at)}</div>
         </div>
-        <button class="btn btn-sm btn-primary-accent" data-uid="${u.id}" data-uname="${escapeHtml(u.full_name)}" onclick="approveUser(this.dataset.uid, this.dataset.uname)">${icon('check',12)}<span>Approve</span></button>
-        <button class="btn btn-sm btn-secondary" data-uid="${u.id}" data-uname="${escapeHtml(u.full_name)}" onclick="rejectUser(this.dataset.uid, this.dataset.uname)">${icon('x',12)}<span>Reject</span></button>
+        <button class="btn btn-sm btn-primary-accent js-approve" data-uid="${u.id}" data-uname="${escapeHtml(u.full_name)}">${icon('check',12)}<span>Approve</span></button>
+        <button class="btn btn-sm btn-secondary js-reject" data-uid="${u.id}" data-uname="${escapeHtml(u.full_name)}">${icon('x',12)}<span>Reject</span></button>
       </div>`).join(''));
+
+    // Wire approve/reject via direct JS handlers — robust against any
+    // weirdness from inline onclick and lets us disable buttons
+    // mid-request to prevent double-fire.
+    $('ad-pending-list').querySelectorAll('.js-approve').forEach(btn => {
+      btn.onclick = () => decideUser(btn, 'approve');
+    });
+    $('ad-pending-list').querySelectorAll('.js-reject').forEach(btn => {
+      btn.onclick = () => decideUser(btn, 'reject');
+    });
+
     if (toastOnNew) toast(`${count} pending account request${count===1?'':'s'} need review`, 'warning');
   } catch (err) { /* silent — non-critical */ }
 }
 
-window.approveUser = async (id, name) => {
-  try {
-    await api('POST', `/auth/users/${id}/approve`);
-    toast(`Approved: ${name}`, 'success');
-    loadPendingApprovals();
-  } catch (err) { toast(err.message, 'error'); }
-};
+async function decideUser(btn, decision) {
+  const id   = btn.dataset.uid;
+  const name = btn.dataset.uname;
+  if (!id) return;
+  const row  = btn.closest('[data-row-id]');
+  const pair = row ? row.querySelectorAll('button') : [];
+  pair.forEach(b => b.disabled = true);
+  btn.dataset.originalLabel = btn.dataset.originalLabel || btn.innerHTML;
+  btn.innerHTML = decision === 'approve' ? 'Approving…' : 'Rejecting…';
 
-window.rejectUser = async (id, name) => {
   try {
-    await api('DELETE', `/auth/users/${id}`);
-    toast(`Rejected: ${name}`, 'info');
-    loadPendingApprovals();
-  } catch (err) { toast(err.message, 'error'); }
+    if (decision === 'approve') {
+      await api('POST', `/auth/users/${id}/approve`);
+      toast(`Approved: ${name}`, 'success');
+    } else {
+      await api('DELETE', `/auth/users/${id}`);
+      toast(`Rejected: ${name}`, 'info');
+    }
+    // Refresh every surface that shows pending data:
+    await loadPendingApprovals();
+    if (currentRole === 'Administrator') renderTasksBand('ad-tasks-band');
+    refreshNotifications();
+  } catch (err) {
+    toast(err.message, 'error');
+    pair.forEach(b => b.disabled = false);
+    btn.innerHTML = btn.dataset.originalLabel || (decision === 'approve' ? 'Approve' : 'Reject');
+  }
+}
+
+// Keep old function names as window aliases for any leftover inline references
+window.approveUser = (id, name) => {
+  const btn = document.querySelector(`.js-approve[data-uid="${id}"]`);
+  if (btn) decideUser(btn, 'approve');
+};
+window.rejectUser = (id, name) => {
+  const btn = document.querySelector(`.js-reject[data-uid="${id}"]`);
+  if (btn) decideUser(btn, 'reject');
 };
 
 /* ─── Tasks band: small summary cards at top of dashboard ──── */
