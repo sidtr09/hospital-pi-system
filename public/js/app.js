@@ -1325,23 +1325,42 @@ PAGES['patient-search'] = async (el) => {
       const canEdit = currentRole === 'Administrator' || currentRole === 'Doctor';
       setHTML('ps-results', `<div class="table-wrap"><table>
         <thead><tr><th>Reference</th><th>Name</th><th>DOB</th><th>Blood</th><th>Registered</th><th style="width:1%"></th></tr></thead>
-        <tbody>${data.map(p => `<tr>
+        <tbody>${data.map(p => `<tr data-row-pid="${p.id}">
           <td><span class="mono" style="font-size:12px">${escapeHtml(p.patient_ref)}</span></td>
           <td><strong>${escapeHtml(p.full_name)}</strong></td>
           <td>${escapeHtml(p.date_of_birth)}</td>
           <td>${p.blood_group ? badge(p.blood_group,'danger') : '<span class="text-faint">—</span>'}</td>
           <td class="text-mut">${fmt(p.registered_at)}</td>
           <td style="white-space:nowrap;text-align:right">
-            <button class="btn btn-xs btn-ghost" data-pid="${p.id}" data-pname="${escapeHtml(p.full_name)}" onclick="viewNotes(this.dataset.pid, this.dataset.pname)">${icon('fileText',12)}<span>Notes</span></button>
-            ${canEdit ? `<button class="btn btn-xs btn-ghost" data-pid="${p.id}" onclick="editPatient(this.dataset.pid)" title="Edit patient">${icon('edit',12,'blue')}</button>` : ''}
-            ${canEdit ? `<button class="btn btn-xs btn-ghost" data-pid="${p.id}" data-pname="${escapeHtml(p.full_name)}" onclick="confirmDeletePatient(this.dataset.pid, this.dataset.pname)" title="Delete patient">${icon('trash',12,'red')}</button>` : ''}
+            <button class="btn btn-xs btn-ghost js-notes" data-pid="${p.id}" data-pname="${escapeHtml(p.full_name)}">${icon('fileText',12)}<span>Notes</span></button>
+            ${canEdit ? `<button class="btn btn-xs btn-ghost js-edit" data-pid="${p.id}" title="Edit patient">${icon('edit',12,'blue')}</button>` : ''}
+            ${canEdit ? `<button class="btn btn-xs btn-ghost js-delete" data-pid="${p.id}" data-pname="${escapeHtml(p.full_name)}" title="Delete patient">${icon('trash',12,'red')}</button>` : ''}
           </td>
         </tr>`).join('')}</tbody></table></div>`);
+
+      // Wire row buttons via JS handlers (robust against inline-onclick quirks)
+      $('ps-results').querySelectorAll('.js-notes').forEach(btn => {
+        btn.onclick = () => viewNotes(btn.dataset.pid, btn.dataset.pname);
+      });
+      $('ps-results').querySelectorAll('.js-edit').forEach(btn => {
+        btn.onclick = () => editPatient(btn.dataset.pid);
+      });
+      $('ps-results').querySelectorAll('.js-delete').forEach(btn => {
+        btn.onclick = () => confirmDeletePatient(btn.dataset.pid, btn.dataset.pname);
+      });
     } catch(e) { setHTML('ps-results', `<div class="alert alert-error">${escapeHtml(e.message)}</div>`); }
   });
   $('ps-input').oninput = run;
   run();
 };
+
+// Re-run the active patient search after a successful edit/delete so the
+// row is updated or removed without the caller having to know about it.
+function refreshPatientSearch() {
+  if (currentPage !== 'patient-search') return;
+  const inp = $('ps-input');
+  if (inp) inp.dispatchEvent(new Event('input'));
+}
 
 /* ════════════════════════════════════════════════════════════════
    EDIT PATIENT (Admin + Doctor)
@@ -1414,14 +1433,20 @@ window.editPatient = async (id) => {
       if (!payload.full_name || !payload.date_of_birth) {
         toast('Name and DOB are required', 'warning'); return;
       }
+      const saveBtn = $('e-save');
+      saveBtn.disabled = true;
+      saveBtn.innerHTML = 'Saving…';
       try {
         await api('PUT', `/patients/${id}`, payload);
         toast('Patient updated', 'success');
         closeModal();
-        if (currentPage === 'patient-search') {
-          const ps = $('ps-input'); if (ps) ps.dispatchEvent(new Event('input'));
-        }
-      } catch(e) { toast(e.message, 'error'); }
+        refreshPatientSearch();
+        refreshNotifications();
+      } catch(e) {
+        toast(e.message, 'error');
+        saveBtn.disabled = false;
+        saveBtn.innerHTML = 'Save Changes';
+      }
     };
   } catch(e) { setHTML('modal-body', `<div class="alert alert-error">${escapeHtml(e.message)}</div>`); }
 };
@@ -1439,14 +1464,20 @@ window.confirmDeletePatient = (id, name) => {
     </div>`);
   $('d-cancel').onclick = closeModal;
   $('d-confirm').onclick = async () => {
+    const btn = $('d-confirm');
+    btn.disabled = true;
+    btn.innerHTML = 'Deleting…';
     try {
       await api('DELETE', `/patients/${id}`);
       toast(`Deleted: ${name}`, 'success');
       closeModal();
-      if (currentPage === 'patient-search') {
-        const ps = $('ps-input'); if (ps) ps.dispatchEvent(new Event('input'));
-      }
-    } catch(e) { toast(e.message, 'error'); }
+      refreshPatientSearch();
+      refreshNotifications();
+    } catch(e) {
+      toast(e.message, 'error');
+      btn.disabled = false;
+      btn.innerHTML = `${icon('trash',12)}<span>Delete</span>`;
+    }
   };
 };
 
