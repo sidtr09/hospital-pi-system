@@ -207,18 +207,18 @@ const ROLE_CONFIG = {
     badge: 'Admin',
     nav: [
       { section: 'Overview' },
-      { page: 'dashboard',        icon: 'home',      label: 'Dashboard' },
+      { page: 'dashboard',        icon: 'home',      tone: 'blue',   label: 'Dashboard' },
       { section: 'Patients' },
-      { page: 'patient-search',   icon: 'search',    label: 'Patient Search' },
-      { page: 'patient-register', icon: 'userPlus',  label: 'New Patient' },
+      { page: 'patient-search',   icon: 'search',    tone: 'teal',   label: 'Patient Search' },
+      { page: 'patient-register', icon: 'userPlus',  tone: 'green',  label: 'New Patient' },
       { section: 'Inventory' },
-      { page: 'stock-ledger',     icon: 'package',   label: 'Stock Ledger' },
-      { page: 'low-stock',        icon: 'alert',     label: 'Low Stock' },
+      { page: 'stock-ledger',     icon: 'package',   tone: 'orange', label: 'Stock Ledger' },
+      { page: 'low-stock',        icon: 'alert',     tone: 'red',    label: 'Low Stock' },
       { section: 'Clinical Flow' },
-      { page: 'triage-queue',     icon: 'ambulance', label: 'Triage Queue' },
-      { page: 'staff-roster',     icon: 'users',     label: 'Staff Roster' },
+      { page: 'triage-queue',     icon: 'ambulance', tone: 'red',    label: 'Triage Queue' },
+      { page: 'staff-roster',     icon: 'users',     tone: 'violet', label: 'Staff Roster' },
       { section: 'Resources' },
-      { page: 'doc-library',      icon: 'book',      label: 'Documents' },
+      { page: 'doc-library',      icon: 'book',      tone: 'indigo', label: 'Documents' },
     ],
   },
   Doctor: {
@@ -226,13 +226,13 @@ const ROLE_CONFIG = {
     badge: 'Doctor',
     nav: [
       { section: 'Overview' },
-      { page: 'dashboard',      icon: 'home',      label: 'Dashboard' },
+      { page: 'dashboard',      icon: 'home',      tone: 'blue',   label: 'Dashboard' },
       { section: 'Patients' },
-      { page: 'patient-search', icon: 'search',    label: 'Patient Search' },
+      { page: 'patient-search', icon: 'search',    tone: 'teal',   label: 'Patient Search' },
       { section: 'Clinical Flow' },
-      { page: 'triage-queue',   icon: 'ambulance', label: 'Triage Queue' },
+      { page: 'triage-queue',   icon: 'ambulance', tone: 'red',    label: 'Triage Queue' },
       { section: 'Resources' },
-      { page: 'doc-library',    icon: 'book',      label: 'Documents' },
+      { page: 'doc-library',    icon: 'book',      tone: 'indigo', label: 'Documents' },
     ],
   },
   Nurse: {
@@ -240,14 +240,14 @@ const ROLE_CONFIG = {
     badge: 'Nurse',
     nav: [
       { section: 'Overview' },
-      { page: 'dashboard',        icon: 'home',      label: 'Dashboard' },
+      { page: 'dashboard',        icon: 'home',      tone: 'blue',   label: 'Dashboard' },
       { section: 'Patients' },
-      { page: 'patient-register', icon: 'userPlus',  label: 'New Patient' },
+      { page: 'patient-register', icon: 'userPlus',  tone: 'green',  label: 'New Patient' },
       { section: 'Clinical Flow' },
-      { page: 'triage-queue',     icon: 'ambulance', label: 'Triage Queue' },
-      { page: 'staff-roster',     icon: 'users',     label: 'Staff Roster' },
+      { page: 'triage-queue',     icon: 'ambulance', tone: 'red',    label: 'Triage Queue' },
+      { page: 'staff-roster',     icon: 'users',     tone: 'violet', label: 'Staff Roster' },
       { section: 'Inventory' },
-      { page: 'stock-ledger',     icon: 'package',   label: 'Stock Ledger' },
+      { page: 'stock-ledger',     icon: 'package',   tone: 'orange', label: 'Stock Ledger' },
     ],
   },
 };
@@ -298,7 +298,7 @@ function buildSidebar(role) {
   $('sidebar').innerHTML = cfg.nav.map(it => it.section
     ? `<div class="nav-section">${escapeHtml(it.section)}</div>`
     : `<div class="nav-item" data-page="${it.page}">
-         ${icon(it.icon, 16)}<span class="nav-label">${escapeHtml(it.label)}</span>
+         ${icon(it.icon, 16, it.tone || null)}<span class="nav-label">${escapeHtml(it.label)}</span>
        </div>`
   ).join('');
   $('sidebar').querySelectorAll('.nav-item').forEach(el => {
@@ -896,7 +896,7 @@ PAGES['patient-search'] = async (el) => {
       const { data } = await api('GET', `/patients?q=${encodeURIComponent(q)}&limit=50`);
       if (!data.length) {
         setHTML('ps-results', `<div class="empty">
-          <div class="icon">${icon('user', 36)}</div>
+          <div class="icon">${icon('user', 36, 'teal')}</div>
           <p>No patients ${q ? 'match this search' : 'registered yet'}</p>
           ${canRegister ? `<button class="btn btn-primary-accent btn-sm" onclick="navigate('patient-register')">+ Register First Patient</button>` : ''}
         </div>`);
@@ -1138,7 +1138,7 @@ PAGES['stock-ledger'] = async (el) => {
   const renderTable = (items) => {
     if (!items.length) {
       $('inv-table').innerHTML = `<div class="empty">
-        <div class="icon">${icon('package', 36)}</div>
+        <div class="icon">${icon('package', 36, 'orange')}</div>
         <p>No items found</p>
         ${isAdmin ? `<button class="btn btn-primary-accent btn-sm" onclick="document.getElementById('btn-add-item').click()">+ Add First Item</button>` : ''}
       </div>`;
@@ -1323,7 +1323,7 @@ async function loadFullQueue() {
     const { data } = await api('GET', '/queue?status=waiting');
     if (!data.length) {
       el.innerHTML = `<div class="card"><div class="empty">
-        <div class="icon">${icon('ambulance', 36)}</div><p>No patients in queue</p>
+        <div class="icon">${icon('ambulance', 36, 'red')}</div><p>No patients in queue</p>
         <button class="btn btn-primary-accent btn-sm" onclick="showEnqueueModal(()=>navigate('triage-queue'))">+ Add First Patient</button>
       </div></div>`;
       return;
@@ -1425,7 +1425,7 @@ async function loadRosterPage() {
     const { data } = await api('GET', '/queue/roster');
     if (!data.length) {
       el.innerHTML = `<div class="card"><div class="empty">
-        <div class="icon">${icon('users', 36)}</div><p>No staff currently on duty</p>
+        <div class="icon">${icon('users', 36, 'violet')}</div><p>No staff currently on duty</p>
         <button class="btn btn-primary-accent btn-sm" onclick="showAddShiftModal(loadRosterPage)">+ Add First Shift</button>
       </div></div>`;
       return;
