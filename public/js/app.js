@@ -62,6 +62,50 @@ const skelLines = n => Array.from({length: n}, (_, i) =>
 const skelRows  = n => Array.from({length: n}, () =>
   `<div class="skel skel-row"></div>`).join('');
 
+/* ─── Icon system (Lucide-style line SVGs, currentColor) ─ */
+const ICONS = {
+  // Navigation
+  home:         '<path d="M3 9.5L12 3l9 6.5V20a1 1 0 0 1-1 1h-5v-6h-6v6H4a1 1 0 0 1-1-1V9.5z"/>',
+  search:       '<circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>',
+  userPlus:     '<path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="8.5" cy="7" r="4"/><line x1="20" y1="8" x2="20" y2="14"/><line x1="23" y1="11" x2="17" y2="11"/>',
+  package:      '<path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/>',
+  alert:        '<path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>',
+  ambulance:    '<path d="M10 10h4M12 8v4"/><path d="M9 17h6"/><circle cx="6.5" cy="17.5" r="2.5"/><circle cx="16.5" cy="17.5" r="2.5"/><path d="M4 17h-2v-9a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v3h3l3 4v3h-1"/>',
+  users:        '<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/>',
+  book:         '<path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/>',
+  // Actions / UI
+  plus:         '<line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>',
+  refresh:      '<polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>',
+  calendar:     '<rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>',
+  logout:       '<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/>',
+  x:            '<line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>',
+  arrowRight:   '<line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/>',
+  check:        '<polyline points="20 6 9 17 4 12"/>',
+  // Status / state
+  checkCircle:  '<path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/>',
+  trendUp:      '<polyline points="22 7 13.5 15.5 8.5 10.5 2 17"/><polyline points="16 7 22 7 22 13"/>',
+  trendDown:    '<polyline points="22 17 13.5 8.5 8.5 13.5 2 7"/><polyline points="16 17 22 17 22 11"/>',
+  // Clinical / medical
+  hospital:     '<path d="M3 21h18M3 7v14M21 7v14M6 21V11a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v10M9 6V3h6v3M12 10v6M9 13h6"/>',
+  cross:        '<rect x="9" y="3" width="6" height="18" rx="1"/><rect x="3" y="9" width="18" height="6" rx="1"/>',
+  stethoscope:  '<path d="M11 2v2M5 2v2M5 3a2 2 0 0 0-2 2v4a4 4 0 0 0 4 4 4 4 0 0 0 4-4V5a2 2 0 0 0-2-2"/><path d="M8 13v3a5 5 0 0 0 10 0v-1"/><circle cx="18" cy="12" r="2"/>',
+  user:         '<path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>',
+  fileText:     '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/>',
+  pill:         '<path d="M10.5 20.5L19 12a4.95 4.95 0 0 0-7-7L3.5 13.5a4.95 4.95 0 0 0 7 7z"/><line x1="8.5" y1="8.5" x2="15.5" y2="15.5"/>',
+  flask:        '<path d="M10 2v7.31"/><path d="M14 9.31V2"/><path d="M8.5 2h7"/><path d="M14 9.3a6.5 6.5 0 0 1-4 11.7 6.5 6.5 0 0 1-4-11.7"/>',
+  calculator:   '<rect x="4" y="2" width="16" height="20" rx="2"/><line x1="8" y1="6" x2="16" y2="6"/><line x1="8" y1="10" x2="8.01" y2="10"/><line x1="12" y1="10" x2="12.01" y2="10"/><line x1="16" y1="10" x2="16.01" y2="10"/><line x1="8" y1="14" x2="8.01" y2="14"/><line x1="12" y1="14" x2="12.01" y2="14"/><line x1="16" y1="14" x2="16.01" y2="14"/><line x1="8" y1="18" x2="8.01" y2="18"/><line x1="12" y1="18" x2="12.01" y2="18"/><line x1="16" y1="18" x2="16.01" y2="18"/>',
+  shieldCheck:  '<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><polyline points="9 12 11 14 15 10"/>',
+  // System
+  cpu:          '<rect x="4" y="4" width="16" height="16" rx="2"/><rect x="9" y="9" width="6" height="6"/><line x1="9" y1="1" x2="9" y2="4"/><line x1="15" y1="1" x2="15" y2="4"/><line x1="9" y1="20" x2="9" y2="23"/><line x1="15" y1="20" x2="15" y2="23"/><line x1="20" y1="9" x2="23" y2="9"/><line x1="20" y1="14" x2="23" y2="14"/><line x1="1" y1="9" x2="4" y2="9"/><line x1="1" y1="14" x2="4" y2="14"/>',
+  activity:     '<polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>',
+};
+
+function icon(name, size = 16) {
+  const path = ICONS[name];
+  if (!path) return '';
+  return `<span class="icon" style="width:${size}px;height:${size}px"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${path}</svg></span>`;
+}
+
 /* ─── SVG chart helpers ───────────────────────────────── */
 const TRI_COLORS = ['#fa5252', '#fd7e14', '#e67700', '#40c057', '#868e96'];
 
@@ -148,18 +192,18 @@ const ROLE_CONFIG = {
     badge: 'Admin',
     nav: [
       { section: 'Overview' },
-      { page: 'dashboard',        icon: '🏠', label: 'Dashboard' },
+      { page: 'dashboard',        icon: 'home',      label: 'Dashboard' },
       { section: 'Patients' },
-      { page: 'patient-search',   icon: '🔍', label: '[ Patient Search ]' },
-      { page: 'patient-register', icon: '➕', label: '[ New Patient ]' },
+      { page: 'patient-search',   icon: 'search',    label: 'Patient Search' },
+      { page: 'patient-register', icon: 'userPlus',  label: 'New Patient' },
       { section: 'Inventory' },
-      { page: 'stock-ledger',     icon: '📦', label: '[ Stock Ledger ]' },
-      { page: 'low-stock',        icon: '⚠️', label: '[ Low Stock ]' },
+      { page: 'stock-ledger',     icon: 'package',   label: 'Stock Ledger' },
+      { page: 'low-stock',        icon: 'alert',     label: 'Low Stock' },
       { section: 'Clinical Flow' },
-      { page: 'triage-queue',     icon: '🚑', label: '[ Triage Queue ]' },
-      { page: 'staff-roster',     icon: '👥', label: '[ Staff Roster ]' },
+      { page: 'triage-queue',     icon: 'ambulance', label: 'Triage Queue' },
+      { page: 'staff-roster',     icon: 'users',     label: 'Staff Roster' },
       { section: 'Resources' },
-      { page: 'doc-library',      icon: '📚', label: '[ Documents ]' },
+      { page: 'doc-library',      icon: 'book',      label: 'Documents' },
     ],
   },
   Doctor: {
@@ -167,13 +211,13 @@ const ROLE_CONFIG = {
     badge: 'Doctor',
     nav: [
       { section: 'Overview' },
-      { page: 'dashboard',      icon: '🏠', label: 'Dashboard' },
+      { page: 'dashboard',      icon: 'home',      label: 'Dashboard' },
       { section: 'Patients' },
-      { page: 'patient-search', icon: '🔍', label: '[ Patient Search ]' },
+      { page: 'patient-search', icon: 'search',    label: 'Patient Search' },
       { section: 'Clinical Flow' },
-      { page: 'triage-queue',   icon: '🚑', label: '[ Triage Queue ]' },
+      { page: 'triage-queue',   icon: 'ambulance', label: 'Triage Queue' },
       { section: 'Resources' },
-      { page: 'doc-library',    icon: '📚', label: '[ Documents ]' },
+      { page: 'doc-library',    icon: 'book',      label: 'Documents' },
     ],
   },
   Nurse: {
@@ -181,14 +225,14 @@ const ROLE_CONFIG = {
     badge: 'Nurse',
     nav: [
       { section: 'Overview' },
-      { page: 'dashboard',        icon: '🏠', label: 'Dashboard' },
+      { page: 'dashboard',        icon: 'home',      label: 'Dashboard' },
       { section: 'Patients' },
-      { page: 'patient-register', icon: '➕', label: '[ New Patient ]' },
+      { page: 'patient-register', icon: 'userPlus',  label: 'New Patient' },
       { section: 'Clinical Flow' },
-      { page: 'triage-queue',     icon: '🚑', label: '[ Triage Queue ]' },
-      { page: 'staff-roster',     icon: '👥', label: '[ Staff Roster ]' },
+      { page: 'triage-queue',     icon: 'ambulance', label: 'Triage Queue' },
+      { page: 'staff-roster',     icon: 'users',     label: 'Staff Roster' },
       { section: 'Inventory' },
-      { page: 'stock-ledger',     icon: '📦', label: '[ Stock Ledger ]' },
+      { page: 'stock-ledger',     icon: 'package',   label: 'Stock Ledger' },
     ],
   },
 };
@@ -239,7 +283,7 @@ function buildSidebar(role) {
   $('sidebar').innerHTML = cfg.nav.map(it => it.section
     ? `<div class="nav-section">${escapeHtml(it.section)}</div>`
     : `<div class="nav-item" data-page="${it.page}">
-         <span class="icon">${it.icon}</span>${escapeHtml(it.label)}
+         ${icon(it.icon, 16)}<span class="nav-label">${escapeHtml(it.label)}</span>
        </div>`
   ).join('');
   $('sidebar').querySelectorAll('.nav-item').forEach(el => {
@@ -341,8 +385,8 @@ async function renderAdminDashboard(el) {
         <p>${today}</p>
       </div>
       <div class="page-actions">
-        <button class="pill-btn" onclick="navigate('dashboard')">📅 Today</button>
-        <button class="btn btn-secondary btn-sm" onclick="navigate('dashboard')">↻ Refresh</button>
+        <button class="pill-btn" onclick="navigate('dashboard')">${icon('calendar', 14)}<span>Today</span></button>
+        <button class="btn btn-secondary btn-sm" onclick="navigate('dashboard')">${icon('refresh', 14)}<span>Refresh</span></button>
       </div>
     </div>
 
@@ -385,7 +429,7 @@ async function renderAdminDashboard(el) {
     <div class="col-6040 mb-5">
       <div class="card">
         <div class="card-head">
-          <h2>🚑 Active Triage Queue</h2>
+          <h2>${icon('ambulance', 16)}Active Triage Queue</h2>
           <a class="meta" href="#" onclick="event.preventDefault();navigate('triage-queue')">View all →</a>
         </div>
         <div id="ad-queue">${skelRows(4)}</div>
@@ -407,7 +451,7 @@ async function renderAdminDashboard(el) {
     <div class="col-6040 mb-5">
       <div class="card">
         <div class="card-head">
-          <h2>⚠️ Critical Low Stock</h2>
+          <h2>${icon('alert', 16)}Critical Low Stock</h2>
           <a class="meta" href="#" onclick="event.preventDefault();navigate('low-stock')">View all →</a>
         </div>
         <div id="ad-stock">${skelRows(4)}</div>
@@ -427,7 +471,7 @@ async function renderAdminDashboard(el) {
     </div>
 
     <div class="card">
-      <div class="card-head"><h2>🖥 System Health</h2><span class="meta">Live</span></div>
+      <div class="card-head"><h2>${icon('cpu', 16)}System Health</h2><span class="meta">Live</span></div>
       <div class="card-body" id="ad-health">${skelLines(2)}</div>
     </div>`;
 
@@ -479,7 +523,7 @@ async function renderAdminDashboard(el) {
         <td>${escapeHtml(r.full_name||'—')}</td>
         <td class="ellipsis" style="max-width:180px">${escapeHtml(r.chief_complaint)}</td>
       </tr>`).join('')}</tbody></table></div>`
-      : `<div class="empty"><div class="icon">✅</div><p>Queue is clear</p></div>`);
+      : `<div class="empty"><div class="icon">${icon('checkCircle', 36)}</div><p>Queue is clear</p></div>`);
 
     // Triage donut
     const triSlices = byLevel.map((v,i) => ({ label:`T${i+1} ${labels[i]}`, value:v, color: TRI_COLORS[i] }))
@@ -501,7 +545,7 @@ async function renderAdminDashboard(el) {
         <td>${badge(i.quantity_on_hand,'danger')}</td>
         <td>${i.reorder_threshold}</td>
       </tr>`).join('')}</tbody></table></div>`
-      : `<div class="empty"><div class="icon">✅</div><p>All stock above threshold</p></div>`);
+      : `<div class="empty"><div class="icon">${icon('checkCircle', 36)}</div><p>All stock above threshold</p></div>`);
   }
 
   // ── Staff donut ──
@@ -549,8 +593,8 @@ async function renderDoctorDashboard(el) {
         <p>${today}</p>
       </div>
       <div class="page-actions">
-        <button class="pill-btn" onclick="navigate('dashboard')">📅 Today</button>
-        <button class="btn btn-secondary btn-sm" onclick="navigate('dashboard')">↻ Refresh</button>
+        <button class="pill-btn" onclick="navigate('dashboard')">${icon('calendar', 14)}<span>Today</span></button>
+        <button class="btn btn-secondary btn-sm" onclick="navigate('dashboard')">${icon('refresh', 14)}<span>Refresh</span></button>
       </div>
     </div>
 
@@ -575,7 +619,7 @@ async function renderDoctorDashboard(el) {
     <div class="grid-7030 mb-5">
       <div class="card">
         <div class="card-head">
-          <h2>🚑 Triage Priority Queue</h2>
+          <h2>${icon('ambulance', 16)}Triage Priority Queue</h2>
           <button class="btn btn-primary-accent btn-xs" onclick="showEnqueueModal(loadDoctorQueue)">+ Add</button>
         </div>
         <div id="dd-queue">${skelRows(5)}</div>
@@ -593,7 +637,7 @@ async function renderDoctorDashboard(el) {
     </div>
 
     <div class="card">
-      <div class="card-head"><h2>🔍 Quick Patient Lookup</h2><span class="meta">Search by name or reference</span></div>
+      <div class="card-head"><h2>${icon('search', 16)}Quick Patient Lookup</h2><span class="meta">Search by name or reference</span></div>
       <div class="card-body">
         <div class="live-search">
           <input id="dd-lookup" placeholder="Start typing a name or reference…" autofocus>
@@ -616,7 +660,7 @@ async function renderDoctorDashboard(el) {
             <div class="name ellipsis">${escapeHtml(p.full_name)}</div>
             <div class="meta">${escapeHtml(p.patient_ref)} · DOB ${escapeHtml(p.date_of_birth)}</div>
           </div>
-          <button class="btn btn-xs btn-primary-accent" onclick="viewNotes(${p.id},'${escapeHtml(p.full_name).replace(/'/g,'&apos;')}')">📋 Notes</button>
+          <button class="btn btn-xs btn-primary-accent" onclick="viewNotes(${p.id},'${escapeHtml(p.full_name).replace(/'/g,'&apos;')}')">${icon('fileText',12)}Notes</button>
         </div>`).join('')
         : '<div class="empty" style="padding:24px"><p>No patients found</p></div>');
     } catch(e) { setHTML('dd-lookup-result', `<div class="alert alert-error">${escapeHtml(e.message)}</div>`); }
@@ -661,7 +705,7 @@ async function loadDoctorQueue() {
             : `<button class="btn btn-xs btn-ghost" onclick="resolveQueue(${r.id})">Mark done</button>`}
         </td>
       </tr>`).join('')}</tbody></table></div>`
-      : `<div class="empty"><div class="icon">✅</div><p>Queue is clear</p></div>`;
+      : `<div class="empty"><div class="icon">${icon('checkCircle', 36)}</div><p>Queue is clear</p></div>`;
   } catch(e) { toast(e.message, 'error'); }
 }
 
@@ -683,8 +727,8 @@ async function renderNurseDashboard(el) {
         <p>${today}</p>
       </div>
       <div class="page-actions">
-        <button class="pill-btn" onclick="navigate('dashboard')">📅 Today</button>
-        <button class="btn btn-secondary btn-sm" onclick="navigate('dashboard')">↻ Refresh</button>
+        <button class="pill-btn" onclick="navigate('dashboard')">${icon('calendar', 14)}<span>Today</span></button>
+        <button class="btn btn-secondary btn-sm" onclick="navigate('dashboard')">${icon('refresh', 14)}<span>Refresh</span></button>
       </div>
     </div>
     <div class="stat-tiles" style="grid-template-columns:repeat(3,1fr)">
@@ -706,7 +750,7 @@ async function renderNurseDashboard(el) {
     </div>
     <div class="col-4060">
       <div class="card">
-        <div class="card-head"><h2>➕ Quick Triage Intake</h2><span class="meta">3 steps</span></div>
+        <div class="card-head"><h2>${icon('plus', 16)}Quick Triage Intake</h2><span class="meta">3 steps</span></div>
         <div class="card-body">
           <div id="nd-intake-msg"></div>
           <div class="form-group" style="margin-bottom:12px">
@@ -736,7 +780,7 @@ async function renderNurseDashboard(el) {
       </div>
       <div class="card">
         <div class="card-head">
-          <h2>🚑 Current Queue</h2>
+          <h2>${icon('ambulance', 16)}Current Queue</h2>
           <a class="meta" href="#" onclick="event.preventDefault();navigate('triage-queue')">View all →</a>
         </div>
         <div id="nd-queue">${skelRows(5)}</div>
@@ -805,7 +849,7 @@ async function loadNurseData() {
         <td class="ellipsis" style="max-width:140px">${escapeHtml(r.chief_complaint)}</td>
         <td><button class="btn btn-xs btn-ghost" onclick="resolveQueue(${r.id})">Done</button></td>
       </tr>`).join('')}</tbody></table></div>`
-      : `<div class="empty"><div class="icon">✅</div><p>Queue is clear</p></div>`);
+      : `<div class="empty"><div class="icon">${icon('checkCircle', 36)}</div><p>Queue is clear</p></div>`);
   }
   if (ls.status==='fulfilled') setText('nd-stock', ls.value.alert_count ?? 0);
   if (st.status==='fulfilled') setText('nd-staff', st.value.data?.length ?? 0);
@@ -837,7 +881,7 @@ PAGES['patient-search'] = async (el) => {
       const { data } = await api('GET', `/patients?q=${encodeURIComponent(q)}&limit=50`);
       if (!data.length) {
         setHTML('ps-results', `<div class="empty">
-          <div class="icon">👤</div>
+          <div class="icon">${icon('user', 36)}</div>
           <p>No patients ${q ? 'match this search' : 'registered yet'}</p>
           ${canRegister ? `<button class="btn btn-primary-accent btn-sm" onclick="navigate('patient-register')">+ Register First Patient</button>` : ''}
         </div>`);
@@ -851,7 +895,7 @@ PAGES['patient-search'] = async (el) => {
           <td>${escapeHtml(p.date_of_birth)}</td>
           <td>${p.blood_group ? badge(p.blood_group,'danger') : '<span class="text-faint">—</span>'}</td>
           <td class="text-mut">${fmt(p.registered_at)}</td>
-          <td><button class="btn btn-xs btn-ghost" onclick="viewNotes(${p.id},'${escapeHtml(p.full_name).replace(/'/g,'&apos;')}')">📋 Notes</button></td>
+          <td><button class="btn btn-xs btn-ghost" onclick="viewNotes(${p.id},'${escapeHtml(p.full_name).replace(/'/g,'&apos;')}')">${icon('fileText',12)}Notes</button></td>
         </tr>`).join('')}</tbody></table></div>`);
     } catch(e) { setHTML('ps-results', `<div class="alert alert-error">${escapeHtml(e.message)}</div>`); }
   });
@@ -991,7 +1035,7 @@ PAGES['patient-register'] = (el) => {
         </div>
       </div>
       <div class="card">
-        <div class="card-head"><h2>📋 Recently Added</h2><span class="meta">Today</span></div>
+        <div class="card-head"><h2>${icon('fileText', 16)}Recently Added</h2><span class="meta">Today</span></div>
         <div id="r-recent">${skelLines(4)}</div>
       </div>
     </div>`;
@@ -1079,7 +1123,7 @@ PAGES['stock-ledger'] = async (el) => {
   const renderTable = (items) => {
     if (!items.length) {
       $('inv-table').innerHTML = `<div class="empty">
-        <div class="icon">📦</div>
+        <div class="icon">${icon('package', 36)}</div>
         <p>No items found</p>
         ${isAdmin ? `<button class="btn btn-primary-accent btn-sm" onclick="document.getElementById('btn-add-item').click()">+ Add First Item</button>` : ''}
       </div>`;
@@ -1213,19 +1257,19 @@ PAGES['low-stock'] = async (el) => {
   el.innerHTML = `
     <div class="page-header">
       <div><h1>[ Low Stock Alerts ]</h1><p>Items at or below their reorder threshold</p></div>
-      <button class="btn btn-secondary btn-sm" onclick="navigate('low-stock')">↻ Refresh</button>
+      <button class="btn btn-secondary btn-sm" onclick="navigate('low-stock')">${icon('refresh',14)}Refresh</button>
     </div>
     <div id="ls-content">${skelRows(6)}</div>`;
   try {
     const { data, alert_count } = await api('GET', '/inventory/alerts/low-stock');
     if (!data.length) {
       $('ls-content').innerHTML = `<div class="card"><div class="empty">
-        <div class="icon">✅</div><p>All stock levels are above their threshold</p>
+        <div class="icon">${icon('shieldCheck', 36)}</div><p>All stock levels are above their threshold</p>
       </div></div>`;
       return;
     }
     $('ls-content').innerHTML = `
-      <div class="alert alert-warn">⚠️ ${alert_count} item${alert_count!==1?'s':''} need${alert_count===1?'s':''} restocking</div>
+      <div class="alert alert-warn">${icon('alert',14)}<span>${alert_count} item${alert_count!==1?'s':''} need${alert_count===1?'s':''} restocking</span></div>
       <div class="card"><div class="table-wrap"><table>
         <thead><tr><th>Code</th><th>Item</th><th>Category</th><th>On hand</th><th>Threshold</th><th>Deficit</th><th>Location</th></tr></thead>
         <tbody>${data.map(i => `<tr>
@@ -1249,7 +1293,7 @@ PAGES['triage-queue'] = async (el) => {
     <div class="page-header">
       <div><h1>[ Triage Priority Queue ]</h1><p>Sorted by severity, then arrival time</p></div>
       <div class="page-actions">
-        <button class="btn btn-secondary btn-sm" onclick="navigate('triage-queue')">↻ Refresh</button>
+        <button class="btn btn-secondary btn-sm" onclick="navigate('triage-queue')">${icon('refresh',14)}Refresh</button>
         <button class="btn btn-primary-accent" onclick="showEnqueueModal(()=>navigate('triage-queue'))">+ Add to Queue</button>
       </div>
     </div>
@@ -1264,7 +1308,7 @@ async function loadFullQueue() {
     const { data } = await api('GET', '/queue?status=waiting');
     if (!data.length) {
       el.innerHTML = `<div class="card"><div class="empty">
-        <div class="icon">🚑</div><p>No patients in queue</p>
+        <div class="icon">${icon('ambulance', 36)}</div><p>No patients in queue</p>
         <button class="btn btn-primary-accent btn-sm" onclick="showEnqueueModal(()=>navigate('triage-queue'))">+ Add First Patient</button>
       </div></div>`;
       return;
@@ -1366,7 +1410,7 @@ async function loadRosterPage() {
     const { data } = await api('GET', '/queue/roster');
     if (!data.length) {
       el.innerHTML = `<div class="card"><div class="empty">
-        <div class="icon">👥</div><p>No staff currently on duty</p>
+        <div class="icon">${icon('users', 36)}</div><p>No staff currently on duty</p>
         <button class="btn btn-primary-accent btn-sm" onclick="showAddShiftModal(loadRosterPage)">+ Add First Shift</button>
       </div></div>`;
       return;
@@ -1435,17 +1479,17 @@ PAGES['doc-library'] = (el) => {
     </div>
     <div class="card" style="margin-bottom:20px">
       <div class="card-body">
-        <div class="alert alert-info">📚 Documents are stored locally on the Pi. Load guidelines via <code>POST /api/documents</code>.</div>
+        <div class="alert alert-info">${icon('book',14)}<span>Documents are stored locally on the Pi. Load guidelines via <code>POST /api/documents</code>.</span></div>
         <div class="doc-grid" style="margin-top:16px">
           ${[
-            ['📋','Clinical Guidelines','Standard treatment protocols'],
-            ['💊','Drug References','Dosage and interactions'],
-            ['🔬','Lab Reference','Normal value ranges'],
-            ['🧮','[ Calculator ]','BMI, GFR, drug dose'],
-            ['📄','SOPs','Standard operating procedures'],
-            ['🩺','Triage Protocols','Emergency decision guides'],
-          ].map(([i,t,d]) => `<div class="doc-tile">
-            <div class="ico">${i}</div>
+            ['fileText',   'Clinical Guidelines','Standard treatment protocols'],
+            ['pill',       'Drug References',    'Dosage and interactions'],
+            ['flask',      'Lab Reference',      'Normal value ranges'],
+            ['calculator', 'Calculator',         'BMI, GFR, drug dose'],
+            ['book',       'SOPs',               'Standard operating procedures'],
+            ['stethoscope','Triage Protocols',   'Emergency decision guides'],
+          ].map(([n,t,d]) => `<div class="doc-tile">
+            <div class="ico">${icon(n, 26)}</div>
             <div class="ttl">${escapeHtml(t)}</div>
             <div class="dsc">${escapeHtml(d)}</div>
           </div>`).join('')}
