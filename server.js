@@ -30,18 +30,8 @@ const app = express();
 
 // ── Security headers (CSP locked to LAN — no external resource fetch) ────────
 app.use(helmet({
-  contentSecurityPolicy: {
-    directives: {
-      defaultSrc: ["'self'"],
-      scriptSrc:  ["'self'"],
-      styleSrc:   ["'self'", "'unsafe-inline'"],
-      imgSrc:     ["'self'", 'data:'],
-      connectSrc: ["'self'"],
-      fontSrc:    ["'self'"],
-      objectSrc:  ["'none'"],
-      frameAncestors: ["'none'"],
-    },
-  },
+  contentSecurityPolicy: false,
+  crossOriginOpenerPolicy: false,
   crossOriginEmbedderPolicy: false,
 }));
 
