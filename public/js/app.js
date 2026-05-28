@@ -106,6 +106,10 @@ const ICONS = {
   edit:         '<path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>',
   trash:        '<polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/>',
   alertCircle:  '<circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>',
+  mail:         '<path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/>',
+  inbox:        '<polyline points="22 12 16 12 14 15 10 15 8 12 2 12"/><path d="M5.45 5.11L2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/>',
+  send:         '<line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/>',
+  zap:          '<polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>',
 };
 
 const ICON_TONES = {
@@ -368,6 +372,8 @@ const ROLE_CONFIG = {
       { page: 'staff-roster',     icon: 'users',     tone: 'violet', label: 'Staff Roster' },
       { section: 'Resources' },
       { page: 'doc-library',      icon: 'book',      tone: 'indigo', label: 'Documents' },
+      { section: 'Team' },
+      { page: 'team',             icon: 'users',     tone: 'violet', label: 'Team' },
       { section: 'Administration' },
       { page: 'staff-accounts',   icon: 'shieldCheck', tone: 'teal',  label: 'Staff Accounts' },
     ],
@@ -383,6 +389,8 @@ const ROLE_CONFIG = {
       { page: 'patient-register', icon: 'userPlus',  tone: 'green',  label: 'New Patient' },
       { section: 'Clinical Flow' },
       { page: 'triage-queue',     icon: 'ambulance', tone: 'red',    label: 'Triage Queue' },
+      { section: 'Team' },
+      { page: 'team',             icon: 'users',     tone: 'violet', label: 'Team' },
       { section: 'Resources' },
       { page: 'doc-library',      icon: 'book',      tone: 'indigo', label: 'Documents' },
     ],
@@ -399,6 +407,8 @@ const ROLE_CONFIG = {
       { section: 'Clinical Flow' },
       { page: 'triage-queue',     icon: 'ambulance', tone: 'red',    label: 'Triage Queue' },
       { page: 'staff-roster',     icon: 'users',     tone: 'violet', label: 'Staff Roster' },
+      { section: 'Team' },
+      { page: 'team',             icon: 'users',     tone: 'violet', label: 'Team' },
       { section: 'Inventory' },
       { page: 'stock-ledger',     icon: 'package',   tone: 'orange', label: 'Stock Ledger' },
     ],
@@ -592,7 +602,9 @@ let _notifItems = [];
 function setupNotifications() {
   const wrap = $('notif-wrap');
   if (!wrap) return;
-  const allowed = currentRole === 'Administrator' || currentRole === 'Doctor';
+  // Every signed-in clinical user gets the bell — Nurse needs it for messages,
+  // Doctor and Admin keep their existing pending-task feeds plus messages.
+  const allowed = ['Administrator', 'Doctor', 'Nurse'].includes(currentRole);
   wrap.style.display = allowed ? '' : 'none';
   if (!allowed) return;
 
@@ -619,7 +631,7 @@ function clearNotifications() {
 }
 
 async function refreshNotifications() {
-  if (!(currentRole === 'Administrator' || currentRole === 'Doctor')) return;
+  if (!['Administrator', 'Doctor', 'Nurse'].includes(currentRole)) return;
   try {
     const items = await collectNotifications();
     _notifItems = items;
@@ -684,8 +696,25 @@ async function collectNotifications() {
     }).catch(() => {}));
   }
 
+  // Unread messages and requests — everyone signed in
+  calls.push(api('GET', '/messages?unread=1').then(({ data }) => {
+    (data || []).forEach(m => items.push({
+      section: m.kind === 'request' ? 'New Requests' : 'New Messages',
+      ttl: `${m.from_name}: ${truncate(m.body, 60)}`,
+      mt:  `${m.from_role || 'Staff'} · ${fmt(m.created_at)}`,
+      icon: m.kind === 'request' ? 'zap' : 'mail',
+      tone: m.kind === 'request' ? 'orange' : 'blue',
+      page: 'team',
+    }));
+  }).catch(() => {}));
+
   await Promise.all(calls);
   return items;
+}
+
+function truncate(s, n) {
+  if (!s) return '';
+  return s.length > n ? s.slice(0, n - 1) + '…' : s;
 }
 
 function updateNotifBadge(count) {
@@ -2218,6 +2247,218 @@ function statusBadge(status) {
   if (status === 'pending')  return badge('Pending',  'warning');
   if (status === 'rejected') return badge('Rejected', 'danger');
   return badge(status || '—', 'gray');
+}
+
+/* ════════════════════════════════════════════════════════════════
+   TEAM — Staff directory + Inbox (Doctor / Nurse)
+════════════════════════════════════════════════════════════════ */
+PAGES['team'] = async (el) => {
+  el.innerHTML = `
+    <div class="page-header">
+      <div><h1>My Team</h1><p>See fellow clinical staff and exchange messages and requests</p></div>
+      <button class="btn btn-outline btn-sm" id="tm-refresh">${icon('refresh',14)}<span>Refresh</span></button>
+    </div>
+
+    <div class="col-6040">
+      <!-- Staff directory -->
+      <div class="card">
+        <div class="card-head">
+          <h2>${icon('users',16,'violet')}Staff Directory</h2>
+          <span class="meta" id="tm-staff-count">—</span>
+        </div>
+        <div class="filter-row">
+          <div class="filter-input"><input id="tm-q" placeholder="Filter by name or role…" autofocus></div>
+        </div>
+        <div id="tm-staff">${skelRows(6)}</div>
+      </div>
+
+      <!-- Inbox -->
+      <div class="card">
+        <div class="card-head">
+          <h2>${icon('inbox',16,'blue')}Inbox</h2>
+          <div style="display:flex;align-items:center;gap:8px">
+            <span class="meta" id="tm-inbox-meta">—</span>
+            <button class="btn btn-xs btn-ghost" id="tm-read-all" title="Mark all as read">${icon('check',12)}<span>Mark all read</span></button>
+          </div>
+        </div>
+        <div id="tm-inbox">${skelRows(6)}</div>
+      </div>
+    </div>`;
+
+  let allStaff = [];
+
+  // ── Load staff directory ──
+  const renderStaff = () => {
+    const q = ($('tm-q')?.value || '').toLowerCase().trim();
+    const list = q ? allStaff.filter(u =>
+      (u.full_name||'').toLowerCase().includes(q) ||
+      (u.role||'').toLowerCase().includes(q)
+    ) : allStaff;
+
+    setText('tm-staff-count', `${list.length} ${list.length === 1 ? 'colleague' : 'colleagues'}`);
+
+    if (!list.length) {
+      setHTML('tm-staff', `<div class="empty"><div class="icon">${icon('users',36,'violet')}</div><p>No colleagues match this filter</p></div>`);
+      return;
+    }
+
+    setHTML('tm-staff', list.map(u => `
+      <div class="pending-request" data-staff="${escapeHtml(u.username)}">
+        <span class="rail-avatar" style="width:32px;height:32px;font-size:12px;margin:0;background:${roleColor(u.role)}">
+          ${escapeHtml((u.full_name||'?').charAt(0).toUpperCase())}
+        </span>
+        <div class="who">
+          <div class="nm">${escapeHtml(u.full_name)} ${u.is_demo ? badge('Demo','gray') : ''}</div>
+          <div class="mt">${badge(u.role, roleBadgeTone(u.role))} · <span class="mono">@${escapeHtml(u.username)}</span></div>
+        </div>
+        <button class="btn btn-sm btn-light tm-send-msg"
+                data-uname="${escapeHtml(u.username)}"
+                data-name="${escapeHtml(u.full_name)}"
+                data-kind="message">${icon('mail',12)}<span>Message</span></button>
+        <button class="btn btn-sm btn-secondary tm-send-req"
+                data-uname="${escapeHtml(u.username)}"
+                data-name="${escapeHtml(u.full_name)}"
+                data-kind="request" style="margin-left:4px">${icon('zap',12,'orange')}<span>Request</span></button>
+      </div>`).join(''));
+
+    $('tm-staff').querySelectorAll('.tm-send-msg, .tm-send-req').forEach(btn => {
+      btn.onclick = () => openComposeModal(btn.dataset.uname, btn.dataset.name, btn.dataset.kind);
+    });
+  };
+
+  const loadStaff = async () => {
+    try {
+      const { data } = await api('GET', '/auth/staff');
+      allStaff = data || [];
+      renderStaff();
+    } catch (e) {
+      setHTML('tm-staff', `<div class="alert alert-error">${escapeHtml(e.message)}</div>`);
+    }
+  };
+
+  // ── Load inbox ──
+  const loadInbox = async () => {
+    try {
+      const { data, unread, count } = await api('GET', '/messages');
+      const totalLabel = `${count} total${unread ? ` · ${unread} unread` : ''}`;
+      setText('tm-inbox-meta', totalLabel);
+      if (!count) {
+        setHTML('tm-inbox', `<div class="empty"><div class="icon">${icon('inbox',36,'blue')}</div><p>Your inbox is empty</p></div>`);
+        return;
+      }
+      setHTML('tm-inbox', data.map(m => renderInboxItem(m)).join(''));
+      $('tm-inbox').querySelectorAll('.tm-read-btn').forEach(btn => {
+        btn.onclick = () => markRead(btn.dataset.mid);
+      });
+      $('tm-inbox').querySelectorAll('.tm-reply-btn').forEach(btn => {
+        btn.onclick = () => openComposeModal(btn.dataset.uname, btn.dataset.name, 'message');
+      });
+      $('tm-inbox').querySelectorAll('.tm-del-btn').forEach(btn => {
+        btn.onclick = () => deleteMessage(btn.dataset.mid);
+      });
+    } catch (e) {
+      setHTML('tm-inbox', `<div class="alert alert-error">${escapeHtml(e.message)}</div>`);
+    }
+  };
+
+  const renderInboxItem = (m) => {
+    const kindIcon = m.kind === 'request' ? icon('zap',14,'orange') : icon('mail',14,'blue');
+    const kindBadge = m.kind === 'request' ? badge('Request','warning') : badge('Message','blue');
+    const unreadDot = m.is_read ? '' : '<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--danger);margin-right:6px;vertical-align:middle"></span>';
+    return `
+      <div class="pending-request" style="${m.is_read ? 'opacity:.85' : ''};border-left:${m.is_read ? '0' : '3px solid var(--danger)'}">
+        <span class="rail-avatar" style="width:32px;height:32px;font-size:12px;margin:0;background:${roleColor(m.from_role)}">
+          ${escapeHtml((m.from_name||'?').charAt(0).toUpperCase())}
+        </span>
+        <div class="who" style="flex:1;min-width:0">
+          <div class="nm">${unreadDot}${escapeHtml(m.from_name)} ${kindBadge}</div>
+          <div class="mt" style="margin-top:4px;color:var(--text);font-size:13px;line-height:1.4;white-space:normal">${escapeHtml(m.body)}</div>
+          <div class="mt" style="margin-top:4px">${kindIcon} <span style="font-size:11px">${fmt(m.created_at)}</span></div>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:4px">
+          ${!m.is_read ? `<button class="btn btn-xs btn-ghost tm-read-btn" data-mid="${m.id}" title="Mark as read">${icon('check',12,'green')}</button>` : ''}
+          <button class="btn btn-xs btn-ghost tm-reply-btn" data-uname="${escapeHtml(m.from_username)}" data-name="${escapeHtml(m.from_name)}" title="Reply">${icon('mail',12,'blue')}</button>
+          <button class="btn btn-xs btn-ghost tm-del-btn" data-mid="${m.id}" title="Delete">${icon('trash',12,'red')}</button>
+        </div>
+      </div>`;
+  };
+
+  // ── Actions ──
+  const markRead = async (id) => {
+    try { await api('PATCH', `/messages/${id}/read`); await loadInbox(); refreshNotifications(); }
+    catch (e) { toast(e.message, 'error'); }
+  };
+  const deleteMessage = async (id) => {
+    try { await api('DELETE', `/messages/${id}`); await loadInbox(); refreshNotifications(); }
+    catch (e) { toast(e.message, 'error'); }
+  };
+  const markAllRead = async () => {
+    try { await api('POST', '/messages/read-all'); await loadInbox(); refreshNotifications(); toast('Inbox cleared', 'success'); }
+    catch (e) { toast(e.message, 'error'); }
+  };
+
+  $('tm-q').oninput      = debounce(renderStaff, 150);
+  $('tm-refresh').onclick = () => { loadStaff(); loadInbox(); };
+  $('tm-read-all').onclick = markAllRead;
+
+  // Initial load
+  loadStaff();
+  loadInbox();
+};
+
+// ── Compose modal — shared by directory and inbox-reply ──────────────
+function openComposeModal(toUsername, toName, kindDefault = 'message') {
+  const kindLabel = kindDefault === 'request' ? 'Request' : 'Message';
+  openModal(`Send ${kindLabel} to ${toName}`, `
+    <div class="form-grid">
+      <div class="form-group full">
+        <label>To</label>
+        <input value="${escapeHtml(toName)} · @${escapeHtml(toUsername)}" disabled style="opacity:.7">
+      </div>
+      <div class="form-group full">
+        <label>Type <span class="req">*</span></label>
+        <select id="msg-kind">
+          <option value="message" ${kindDefault==='message'?'selected':''}>Message</option>
+          <option value="request" ${kindDefault==='request'?'selected':''}>Request</option>
+        </select>
+      </div>
+      <div class="form-group full">
+        <label>Body <span class="req">*</span></label>
+        <textarea id="msg-body" rows="4" placeholder="Type your message…" autofocus></textarea>
+        <span class="hint">Up to 2000 characters</span>
+      </div>
+    </div>
+    <div class="form-actions">
+      <button class="btn btn-ghost" id="msg-cancel">Cancel</button>
+      <button class="btn btn-primary-accent" id="msg-send">${icon('send',12)}<span>Send</span></button>
+    </div>`);
+
+  $('msg-cancel').onclick = closeModal;
+  $('msg-send').onclick = async () => {
+    const body = $('msg-body').value.trim();
+    if (!body) { toast('Body cannot be empty', 'warning'); return; }
+    const btn = $('msg-send');
+    btn.disabled = true;
+    btn.innerHTML = 'Sending…';
+    try {
+      await api('POST', '/messages', {
+        to_username: toUsername,
+        kind:        $('msg-kind').value,
+        body,
+      });
+      toast(`Sent to ${toName}`, 'success');
+      closeModal();
+      // If we sent from the Team page, refresh the inbox to show our reply landed
+      if (currentPage === 'team') {
+        const inbox = $('tm-inbox'); if (inbox) inbox.dispatchEvent(new Event('refresh'));
+      }
+      refreshNotifications();
+    } catch (e) {
+      toast(e.message, 'error');
+      btn.disabled = false;
+      btn.innerHTML = `${icon('send',12)}<span>Send</span>`;
+    }
+  };
 }
 
 /* ════════════════════════════════════════════════════════════════

@@ -131,3 +131,22 @@ CREATE TABLE IF NOT EXISTS users (
 
 CREATE INDEX IF NOT EXISTS idx_users_username ON users(username);
 CREATE INDEX IF NOT EXISTS idx_users_status   ON users(status);
+
+-- ── Staff Messages & Requests (team chatter) ─────────────────────────────────
+
+CREATE TABLE IF NOT EXISTS messages (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    from_username   TEXT    NOT NULL,
+    from_name       TEXT    NOT NULL,
+    from_role       TEXT,
+    to_username     TEXT    NOT NULL,
+    kind            TEXT    NOT NULL DEFAULT 'message'
+                        CHECK(kind IN ('message','request')),
+    body            TEXT    NOT NULL,
+    is_read         INTEGER NOT NULL DEFAULT 0 CHECK(is_read IN (0,1)),
+    created_at      TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_messages_to_unread ON messages(to_username, is_read);
+CREATE INDEX IF NOT EXISTS idx_messages_from      ON messages(from_username);
+CREATE INDEX IF NOT EXISTS idx_messages_created   ON messages(created_at);

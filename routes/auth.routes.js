@@ -49,9 +49,10 @@ router.post('/login', async (req, res, next) => {
       if (demo.password !== password) {
         return res.status(401).json({ error: 'Invalid username or password' });
       }
-      req.session.userId   = demo.id;
-      req.session.userName = demo.name;
-      req.session.userRole = demo.role;
+      req.session.userId       = demo.id;
+      req.session.userUsername = demo.username;
+      req.session.userName     = demo.name;
+      req.session.userRole     = demo.role;
       return res.json({ ok: true, name: demo.name, role: demo.role });
     }
 
@@ -76,9 +77,10 @@ router.post('/login', async (req, res, next) => {
       return res.status(401).json({ error: 'Invalid username or password' });
     }
 
-    req.session.userId   = user.id;
-    req.session.userName = user.full_name;
-    req.session.userRole = user.role;
+    req.session.userId       = user.id;
+    req.session.userUsername = user.username;
+    req.session.userName     = user.full_name;
+    req.session.userRole     = user.role;
     res.json({ ok: true, name: user.full_name, role: user.role });
   } catch (err) { next(err); }
 });
@@ -128,6 +130,29 @@ router.post('/register', async (req, res, next) => {
       ok: true,
       message: 'Your account request has been submitted and is awaiting administrator approval.',
     });
+  } catch (err) { next(err); }
+});
+
+// ── GET /api/auth/staff ─ approved clinical staff visible to any signed-in
+//     user. Used by doctors and nurses to see who else is on the team.
+router.get('/staff', async (req, res, next) => {
+  if (!req.session?.userId) return res.status(401).json({ error: 'Not signed in' });
+  try {
+    const me = req.session.userUsername;
+    const dbUsers = await db.all(
+      `SELECT username, full_name, role
+       FROM users WHERE status = 'approved'
+       ORDER BY full_name ASC`
+    );
+    const demoRows = DEMO_USERS.map(u => ({
+      username:  u.username,
+      full_name: u.name,
+      role:      u.role,
+      is_demo:   true,
+    }));
+    const all = [...demoRows, ...dbUsers]
+      .filter(u => u.username !== me); // exclude self
+    res.json({ data: all, count: all.length });
   } catch (err) { next(err); }
 });
 

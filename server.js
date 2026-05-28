@@ -24,6 +24,7 @@ const patientRoutes  = require('./routes/patient.routes');
 const inventoryRoutes = require('./routes/inventory.routes');
 const queueRoutes    = require('./routes/queue.routes');
 const authRoutes     = require('./routes/auth.routes');
+const messagesRoutes = require('./routes/messages.routes');
 const sessionMiddleware = require('./middleware/session.middleware');
 
 const app = express();
@@ -99,6 +100,7 @@ app.use('/api/auth',      authRoutes);
 app.use('/api/patients',  patientRoutes);
 app.use('/api/inventory', inventoryRoutes);
 app.use('/api/queue',     queueRoutes);
+app.use('/api/messages',  messagesRoutes);
 
 // ── Health check endpoint (LAN monitoring / watchdog ping) ───────────────────
 app.get('/api/health', (req, res) => {
