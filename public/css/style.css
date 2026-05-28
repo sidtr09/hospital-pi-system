@@ -593,6 +593,8 @@ tbody tr.tri td { background: transparent; }
 
 .btn-primary-accent { background: var(--accent); color: white; }
 .btn-primary-accent:hover { background: var(--accent-dark); }
+.btn-light { background: var(--accent-tint); color: var(--accent-dark); }
+.btn-light:hover { background: var(--accent-soft); }
 
 .btn-secondary {
   background: var(--surface); color: var(--text);

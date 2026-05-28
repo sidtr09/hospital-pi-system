@@ -1088,20 +1088,65 @@ async function loadDoctorQueue() {
         <td>${r.assigned_to ? badge(r.assigned_to,'indigo') : badge('Unassigned','gray')}</td>
         <td style="white-space:nowrap">
           ${r.assigned_to !== currentUser
-            ? `<button class="btn btn-xs btn-primary-accent" onclick="assignToMe(${r.id})">Assign me</button>`
-            : `<button class="btn btn-xs btn-ghost" onclick="resolveQueue(${r.id})">Mark done</button>`}
+            ? `<button class="btn btn-xs btn-primary-accent js-assign-me" data-qid="${r.id}">${icon('user',12)}<span>Assign me</span></button>`
+            : `<button class="btn btn-xs btn-ghost js-mark-done" data-qid="${r.id}">${icon('check',12)}<span>Mark done</span></button>`}
         </td>
       </tr>`).join('')}</tbody></table></div>`
       : `<div class="empty"><div class="icon">${icon('checkCircle', 36, 'green')}</div><p>Queue is clear</p></div>`;
+
+    // Wire row buttons via JS — robust against inline-onclick quirks
+    el.querySelectorAll('.js-assign-me').forEach(btn => { btn.onclick = () => assignSelf(btn); });
+    el.querySelectorAll('.js-mark-done').forEach(btn => { btn.onclick = () => resolveSelf(btn); });
   } catch(e) { toast(e.message, 'error'); }
 }
 
-window.assignToMe = async (id) => {
+async function assignSelf(btn) {
+  const id = btn.dataset.qid;
+  if (!id) return;
+  if (!currentUser) { toast('Please sign in again', 'warning'); return; }
+  btn.disabled = true;
+  const orig = btn.innerHTML;
+  btn.innerHTML = 'Assigning…';
   try {
     await api('PATCH', `/queue/${id}`, { assigned_to: currentUser });
     toast('Case assigned to you', 'success');
-    loadDoctorQueue();
-  } catch(e) { toast(e.message, 'error'); }
+    // Refresh the doctor dashboard's queue + the full triage queue + bell
+    if (typeof loadDoctorQueue === 'function') await loadDoctorQueue();
+    if (currentPage === 'triage-queue' && typeof loadFullQueue === 'function') await loadFullQueue();
+    refreshNotifications();
+    if (currentPage === 'dashboard' && currentRole === 'Doctor') renderTasksBand('dd-tasks-band');
+  } catch (err) {
+    toast(err.message, 'error');
+    btn.disabled = false;
+    btn.innerHTML = orig;
+  }
+}
+
+async function resolveSelf(btn) {
+  const id = btn.dataset.qid;
+  if (!id) return;
+  btn.disabled = true;
+  const orig = btn.innerHTML;
+  btn.innerHTML = 'Done…';
+  try {
+    await api('PATCH', `/queue/${id}`, { status: 'completed' });
+    toast('Marked as done', 'success');
+    if (typeof loadDoctorQueue === 'function') await loadDoctorQueue();
+    if (currentPage === 'triage-queue' && typeof loadFullQueue === 'function') await loadFullQueue();
+    refreshNotifications();
+    if (currentPage === 'dashboard' && currentRole === 'Doctor') renderTasksBand('dd-tasks-band');
+  } catch (err) {
+    toast(err.message, 'error');
+    btn.disabled = false;
+    btn.innerHTML = orig;
+  }
+}
+
+// Back-compat aliases for any leftover inline references
+window.assignToMe = (id) => {
+  const btn = document.querySelector(`.js-assign-me[data-qid="${id}"]`);
+  if (btn) assignSelf(btn);
+  else assignSelf({ dataset: { qid: id }, disabled: false, innerHTML: '' });
 };
 
 /* ─────────────── NURSE DASHBOARD ─────────────── */
@@ -1817,8 +1862,9 @@ async function loadFullQueue() {
       return;
     }
     const labels = { 1:'Immediate', 2:'Emergent', 3:'Urgent', 4:'Semi-Urgent', 5:'Non-Urgent' };
+    const isDoctor = currentRole === 'Doctor';
     el.innerHTML = `<div class="card"><div class="table-wrap"><table>
-      <thead><tr><th>Triage</th><th>Patient</th><th>Complaint</th><th>Assigned</th><th>Queued</th><th></th></tr></thead>
+      <thead><tr><th>Triage</th><th>Patient</th><th>Complaint</th><th>Assigned</th><th>Queued</th><th style="width:1%"></th></tr></thead>
       <tbody>${data.map(r => `<tr class="tri-${r.triage_level} tri">
         <td>
           <span class="tri-num t${r.triage_level}">T${r.triage_level}</span>
@@ -1829,9 +1875,18 @@ async function loadFullQueue() {
         <td>${escapeHtml(r.chief_complaint)}</td>
         <td>${r.assigned_to ? badge(r.assigned_to,'indigo') : badge('Unassigned','gray')}</td>
         <td class="text-mut" style="font-size:11px">${fmt(r.queued_at)}</td>
-        <td><button class="btn btn-xs btn-primary-accent" onclick="resolveQueue(${r.id})">Mark Done</button></td>
+        <td style="white-space:nowrap;text-align:right">
+          ${isDoctor && r.assigned_to !== currentUser
+            ? `<button class="btn btn-xs btn-light js-assign-me" data-qid="${r.id}">${icon('user',12)}<span>Assign me</span></button>`
+            : ''}
+          <button class="btn btn-xs btn-primary-accent js-mark-done" data-qid="${r.id}" style="margin-left:4px">${icon('check',12)}<span>Mark Done</span></button>
+        </td>
       </tr>`).join('')}</tbody>
     </table></div></div>`;
+
+    // Wire row buttons via JS
+    el.querySelectorAll('.js-assign-me').forEach(btn => { btn.onclick = () => assignSelf(btn); });
+    el.querySelectorAll('.js-mark-done').forEach(btn => { btn.onclick = () => resolveSelf(btn); });
   } catch(e) { el.innerHTML = `<div class="alert alert-error">${escapeHtml(e.message)}</div>`; }
 }
 
