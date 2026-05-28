@@ -100,10 +100,25 @@ const ICONS = {
   activity:     '<polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>',
 };
 
-function icon(name, size = 16) {
+const ICON_TONES = {
+  red:    '#dc2626',
+  orange: '#d97706',
+  amber:  '#b45309',
+  green:  '#059669',
+  teal:   '#0d9488',
+  blue:   '#2563eb',
+  indigo: '#4f46e5',
+  violet: '#7c3aed',
+  rose:   '#e11d48',
+  pink:   '#db2777',
+  gray:   '#64748b',
+};
+
+function icon(name, size = 16, tone = null) {
   const path = ICONS[name];
   if (!path) return '';
-  return `<span class="icon" style="width:${size}px;height:${size}px"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${path}</svg></span>`;
+  const color = tone && ICON_TONES[tone] ? `;color:${ICON_TONES[tone]}` : '';
+  return `<span class="icon" style="width:${size}px;height:${size}px${color}"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${path}</svg></span>`;
 }
 
 /* ─── SVG chart helpers ───────────────────────────────── */
@@ -429,7 +444,7 @@ async function renderAdminDashboard(el) {
     <div class="col-6040 mb-5">
       <div class="card">
         <div class="card-head">
-          <h2>${icon('ambulance', 16)}Active Triage Queue</h2>
+          <h2>${icon('ambulance', 16, 'red')}Active Triage Queue</h2>
           <a class="meta" href="#" onclick="event.preventDefault();navigate('triage-queue')">View all →</a>
         </div>
         <div id="ad-queue">${skelRows(4)}</div>
@@ -451,7 +466,7 @@ async function renderAdminDashboard(el) {
     <div class="col-6040 mb-5">
       <div class="card">
         <div class="card-head">
-          <h2>${icon('alert', 16)}Critical Low Stock</h2>
+          <h2>${icon('alert', 16, 'orange')}Critical Low Stock</h2>
           <a class="meta" href="#" onclick="event.preventDefault();navigate('low-stock')">View all →</a>
         </div>
         <div id="ad-stock">${skelRows(4)}</div>
@@ -471,7 +486,7 @@ async function renderAdminDashboard(el) {
     </div>
 
     <div class="card">
-      <div class="card-head"><h2>${icon('cpu', 16)}System Health</h2><span class="meta">Live</span></div>
+      <div class="card-head"><h2>${icon('cpu', 16, 'teal')}System Health</h2><span class="meta">Live</span></div>
       <div class="card-body" id="ad-health">${skelLines(2)}</div>
     </div>`;
 
@@ -523,7 +538,7 @@ async function renderAdminDashboard(el) {
         <td>${escapeHtml(r.full_name||'—')}</td>
         <td class="ellipsis" style="max-width:180px">${escapeHtml(r.chief_complaint)}</td>
       </tr>`).join('')}</tbody></table></div>`
-      : `<div class="empty"><div class="icon">${icon('checkCircle', 36)}</div><p>Queue is clear</p></div>`);
+      : `<div class="empty"><div class="icon">${icon('checkCircle', 36, 'green')}</div><p>Queue is clear</p></div>`);
 
     // Triage donut
     const triSlices = byLevel.map((v,i) => ({ label:`T${i+1} ${labels[i]}`, value:v, color: TRI_COLORS[i] }))
@@ -545,7 +560,7 @@ async function renderAdminDashboard(el) {
         <td>${badge(i.quantity_on_hand,'danger')}</td>
         <td>${i.reorder_threshold}</td>
       </tr>`).join('')}</tbody></table></div>`
-      : `<div class="empty"><div class="icon">${icon('checkCircle', 36)}</div><p>All stock above threshold</p></div>`);
+      : `<div class="empty"><div class="icon">${icon('checkCircle', 36, 'green')}</div><p>All stock above threshold</p></div>`);
   }
 
   // ── Staff donut ──
@@ -619,7 +634,7 @@ async function renderDoctorDashboard(el) {
     <div class="grid-7030 mb-5">
       <div class="card">
         <div class="card-head">
-          <h2>${icon('ambulance', 16)}Triage Priority Queue</h2>
+          <h2>${icon('ambulance', 16, 'red')}Triage Priority Queue</h2>
           <button class="btn btn-primary-accent btn-xs" onclick="showEnqueueModal(loadDoctorQueue)">+ Add</button>
         </div>
         <div id="dd-queue">${skelRows(5)}</div>
@@ -637,7 +652,7 @@ async function renderDoctorDashboard(el) {
     </div>
 
     <div class="card">
-      <div class="card-head"><h2>${icon('search', 16)}Quick Patient Lookup</h2><span class="meta">Search by name or reference</span></div>
+      <div class="card-head"><h2>${icon('search', 16, 'blue')}Quick Patient Lookup</h2><span class="meta">Search by name or reference</span></div>
       <div class="card-body">
         <div class="live-search">
           <input id="dd-lookup" placeholder="Start typing a name or reference…" autofocus>
@@ -660,7 +675,7 @@ async function renderDoctorDashboard(el) {
             <div class="name ellipsis">${escapeHtml(p.full_name)}</div>
             <div class="meta">${escapeHtml(p.patient_ref)} · DOB ${escapeHtml(p.date_of_birth)}</div>
           </div>
-          <button class="btn btn-xs btn-primary-accent" onclick="viewNotes(${p.id},'${escapeHtml(p.full_name).replace(/'/g,'&apos;')}')">${icon('fileText',12)}Notes</button>
+          <button class="btn btn-xs btn-primary-accent" onclick="viewNotes(${p.id},'${escapeHtml(p.full_name).replace(/'/g,'&apos;')}')">${icon('fileText',12)}<span>Notes</span></button>
         </div>`).join('')
         : '<div class="empty" style="padding:24px"><p>No patients found</p></div>');
     } catch(e) { setHTML('dd-lookup-result', `<div class="alert alert-error">${escapeHtml(e.message)}</div>`); }
@@ -705,7 +720,7 @@ async function loadDoctorQueue() {
             : `<button class="btn btn-xs btn-ghost" onclick="resolveQueue(${r.id})">Mark done</button>`}
         </td>
       </tr>`).join('')}</tbody></table></div>`
-      : `<div class="empty"><div class="icon">${icon('checkCircle', 36)}</div><p>Queue is clear</p></div>`;
+      : `<div class="empty"><div class="icon">${icon('checkCircle', 36, 'green')}</div><p>Queue is clear</p></div>`;
   } catch(e) { toast(e.message, 'error'); }
 }
 
@@ -750,7 +765,7 @@ async function renderNurseDashboard(el) {
     </div>
     <div class="col-4060">
       <div class="card">
-        <div class="card-head"><h2>${icon('plus', 16)}Quick Triage Intake</h2><span class="meta">3 steps</span></div>
+        <div class="card-head"><h2>${icon('plus', 16, 'green')}Quick Triage Intake</h2><span class="meta">3 steps</span></div>
         <div class="card-body">
           <div id="nd-intake-msg"></div>
           <div class="form-group" style="margin-bottom:12px">
@@ -849,7 +864,7 @@ async function loadNurseData() {
         <td class="ellipsis" style="max-width:140px">${escapeHtml(r.chief_complaint)}</td>
         <td><button class="btn btn-xs btn-ghost" onclick="resolveQueue(${r.id})">Done</button></td>
       </tr>`).join('')}</tbody></table></div>`
-      : `<div class="empty"><div class="icon">${icon('checkCircle', 36)}</div><p>Queue is clear</p></div>`);
+      : `<div class="empty"><div class="icon">${icon('checkCircle', 36, 'green')}</div><p>Queue is clear</p></div>`);
   }
   if (ls.status==='fulfilled') setText('nd-stock', ls.value.alert_count ?? 0);
   if (st.status==='fulfilled') setText('nd-staff', st.value.data?.length ?? 0);
@@ -1035,7 +1050,7 @@ PAGES['patient-register'] = (el) => {
         </div>
       </div>
       <div class="card">
-        <div class="card-head"><h2>${icon('fileText', 16)}Recently Added</h2><span class="meta">Today</span></div>
+        <div class="card-head"><h2>${icon('fileText', 16, 'teal')}Recently Added</h2><span class="meta">Today</span></div>
         <div id="r-recent">${skelLines(4)}</div>
       </div>
     </div>`;
@@ -1264,12 +1279,12 @@ PAGES['low-stock'] = async (el) => {
     const { data, alert_count } = await api('GET', '/inventory/alerts/low-stock');
     if (!data.length) {
       $('ls-content').innerHTML = `<div class="card"><div class="empty">
-        <div class="icon">${icon('shieldCheck', 36)}</div><p>All stock levels are above their threshold</p>
+        <div class="icon">${icon('shieldCheck', 36, 'green')}</div><p>All stock levels are above their threshold</p>
       </div></div>`;
       return;
     }
     $('ls-content').innerHTML = `
-      <div class="alert alert-warn">${icon('alert',14)}<span>${alert_count} item${alert_count!==1?'s':''} need${alert_count===1?'s':''} restocking</span></div>
+      <div class="alert alert-warn">${icon('alert',14,'orange')}<span>${alert_count} item${alert_count!==1?'s':''} need${alert_count===1?'s':''} restocking</span></div>
       <div class="card"><div class="table-wrap"><table>
         <thead><tr><th>Code</th><th>Item</th><th>Category</th><th>On hand</th><th>Threshold</th><th>Deficit</th><th>Location</th></tr></thead>
         <tbody>${data.map(i => `<tr>
@@ -1479,17 +1494,17 @@ PAGES['doc-library'] = (el) => {
     </div>
     <div class="card" style="margin-bottom:20px">
       <div class="card-body">
-        <div class="alert alert-info">${icon('book',14)}<span>Documents are stored locally on the Pi. Load guidelines via <code>POST /api/documents</code>.</span></div>
+        <div class="alert alert-info">${icon('book',14,'blue')}<span>Documents are stored locally on the Pi. Load guidelines via <code>POST /api/documents</code>.</span></div>
         <div class="doc-grid" style="margin-top:16px">
           ${[
-            ['fileText',   'Clinical Guidelines','Standard treatment protocols'],
-            ['pill',       'Drug References',    'Dosage and interactions'],
-            ['flask',      'Lab Reference',      'Normal value ranges'],
-            ['calculator', 'Calculator',         'BMI, GFR, drug dose'],
-            ['book',       'SOPs',               'Standard operating procedures'],
-            ['stethoscope','Triage Protocols',   'Emergency decision guides'],
-          ].map(([n,t,d]) => `<div class="doc-tile">
-            <div class="ico">${icon(n, 26)}</div>
+            ['fileText',   'blue',   'Clinical Guidelines','Standard treatment protocols'],
+            ['pill',       'teal',   'Drug References',    'Dosage and interactions'],
+            ['flask',      'violet', 'Lab Reference',      'Normal value ranges'],
+            ['calculator', 'orange', 'Calculator',         'BMI, GFR, drug dose'],
+            ['book',       'indigo', 'SOPs',               'Standard operating procedures'],
+            ['stethoscope','red',    'Triage Protocols',   'Emergency decision guides'],
+          ].map(([n,c,t,d]) => `<div class="doc-tile">
+            <div class="ico ico-${c}">${icon(n, 20, c)}</div>
             <div class="ttl">${escapeHtml(t)}</div>
             <div class="dsc">${escapeHtml(d)}</div>
           </div>`).join('')}
