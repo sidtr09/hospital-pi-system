@@ -14,7 +14,12 @@ async function api(method, path, body) {
   if (body) opts.body = JSON.stringify(body);
   const res  = await fetch('/api' + path, opts);
   const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw Object.assign(new Error(data.error || 'Request failed'), { status: res.status });
+  if (!res.ok) {
+    throw Object.assign(new Error(data.error || 'Request failed'), {
+      status: res.status,
+      code:   data.code,
+    });
+  }
   return data;
 }
 
@@ -126,6 +131,49 @@ function icon(name, size = 16, tone = null) {
 
 /* ─── SVG chart helpers ───────────────────────────────── */
 const TRI_COLORS = ['#fa5252', '#fd7e14', '#e67700', '#40c057', '#868e96'];
+
+/* ─── Pending account approvals (admin only) ──────────────── */
+async function loadPendingApprovals(toastOnNew = false) {
+  if (currentRole !== 'Administrator') return;
+  try {
+    const { data, count } = await api('GET', '/auth/pending');
+    const card = $('ad-pending-card');
+    if (!card) return;
+    if (!count) {
+      card.style.display = 'none';
+      return;
+    }
+    card.style.display = 'block';
+    setText('ad-pending-count', `${count} pending`);
+    setHTML('ad-pending-list', data.map(u => `
+      <div class="pending-request">
+        <div class="rail-avatar" style="width:32px;height:32px;font-size:12px;margin:0;background:#fd7e14">${escapeHtml((u.full_name||'?').charAt(0).toUpperCase())}</div>
+        <div class="who">
+          <div class="nm">${escapeHtml(u.full_name)} <span style="font-weight:400;color:var(--text-mut)">· @${escapeHtml(u.username)}</span></div>
+          <div class="mt">Requested role: <strong>${escapeHtml(u.role)}</strong> · ${fmt(u.requested_at)}</div>
+        </div>
+        <button class="btn btn-sm btn-primary-accent" data-uid="${u.id}" data-uname="${escapeHtml(u.full_name)}" onclick="approveUser(this.dataset.uid, this.dataset.uname)">${icon('check',12)}<span>Approve</span></button>
+        <button class="btn btn-sm btn-secondary" data-uid="${u.id}" data-uname="${escapeHtml(u.full_name)}" onclick="rejectUser(this.dataset.uid, this.dataset.uname)">${icon('x',12)}<span>Reject</span></button>
+      </div>`).join(''));
+    if (toastOnNew) toast(`${count} pending account request${count===1?'':'s'} need review`, 'warning');
+  } catch (err) { /* silent — non-critical */ }
+}
+
+window.approveUser = async (id, name) => {
+  try {
+    await api('POST', `/auth/users/${id}/approve`);
+    toast(`Approved: ${name}`, 'success');
+    loadPendingApprovals();
+  } catch (err) { toast(err.message, 'error'); }
+};
+
+window.rejectUser = async (id, name) => {
+  try {
+    await api('DELETE', `/auth/users/${id}`);
+    toast(`Rejected: ${name}`, 'info');
+    loadPendingApprovals();
+  } catch (err) { toast(err.message, 'error'); }
+};
 
 function areaChart(values, opts = {}) {
   const W = opts.width  || 720;
@@ -325,13 +373,21 @@ function navigate(page) {
 }
 
 /* ════════════════════════════════════════════════════════════════
-   AUTH
+   AUTH — login / register / pending toggle
 ════════════════════════════════════════════════════════════════ */
+function showAuthCard(which) {
+  ['auth-login', 'auth-register', 'auth-pending'].forEach(id => {
+    const el = $(id);
+    if (!el) return;
+    el.classList.toggle('auth-card-hidden', id !== `auth-${which}`);
+  });
+}
+
 async function tryLogin() {
   const u = $('username').value.trim();
   const p = $('password').value;
-  $('login-error').textContent = '';
-  $('login-btn').textContent = 'Signing in…';
+  setText('login-error', '');
+  setText('login-btn', 'Signing in…');
   try {
     const { name, role } = await api('POST', '/auth/login', { username: u, password: p });
     currentRole = role;
@@ -339,9 +395,9 @@ async function tryLogin() {
     const cfg = ROLE_CONFIG[role] || ROLE_CONFIG.Administrator;
 
     document.body.className = cfg.theme;
-    $('user-name').textContent = name;
-    $('user-role').textContent = cfg.badge;
-    $('user-avatar').textContent = (name || '?').charAt(0).toUpperCase();
+    setText('user-name', name);
+    setText('user-role', cfg.badge);
+    setText('user-avatar', (name || '?').charAt(0).toUpperCase());
 
     buildSidebar(role);
     $('login-screen').style.display = 'none';
@@ -351,18 +407,57 @@ async function tryLogin() {
     navigate('dashboard');
     toast(`Welcome back, ${name.split(' ')[0]}`, 'success');
   } catch (err) {
-    $('login-error').textContent = err.message;
+    if (err.code === 'pending' || err.code === 'rejected') {
+      setText('pending-msg', err.message);
+      showAuthCard('pending');
+    } else {
+      setText('login-error', err.message);
+    }
   }
-  $('login-btn').textContent = 'Sign In';
+  setText('login-btn', 'Sign In');
 }
-$('login-btn').onclick = tryLogin;
-$('password').onkeydown = e => { if (e.key === 'Enter') tryLogin(); };
+
+async function tryRegister() {
+  const fullName = $('r-fullname').value.trim();
+  const username = $('r-username').value.trim();
+  const role     = $('r-role').value;
+  const password = $('r-password').value;
+  setText('register-error', '');
+  if (!fullName || !username || !password) {
+    setText('register-error', 'Please fill all required fields'); return;
+  }
+  if (password.length < 6) {
+    setText('register-error', 'Password must be at least 6 characters'); return;
+  }
+  setText('register-btn', 'Submitting…');
+  try {
+    const { message } = await api('POST', '/auth/register', {
+      full_name: fullName, username, password, role,
+    });
+    setText('pending-msg', message || 'Your account is awaiting administrator approval.');
+    ['r-fullname','r-username','r-password'].forEach(id => $(id).value = '');
+    showAuthCard('pending');
+  } catch (err) {
+    setText('register-error', err.message);
+  }
+  setText('register-btn', 'Submit Request');
+}
+
+$('login-btn').onclick    = tryLogin;
+$('register-btn').onclick = tryRegister;
+$('password').onkeydown   = e => { if (e.key === 'Enter') tryLogin(); };
+$('r-password').onkeydown = e => { if (e.key === 'Enter') tryRegister(); };
+$('show-register').onclick = () => { setText('login-error',''); showAuthCard('register'); };
+$('show-login').onclick    = () => { setText('register-error',''); showAuthCard('login'); };
+$('pending-back').onclick  = () => showAuthCard('login');
+
 $('logout-btn').onclick = async () => {
   await api('POST', '/auth/logout');
   document.body.className = '';
   currentRole = null; currentUser = null;
   $('app').style.display = 'none';
   $('login-screen').style.display = 'flex';
+  showAuthCard('login');
   $('username').value = ''; $('password').value = '';
 };
 
@@ -490,10 +585,20 @@ async function renderAdminDashboard(el) {
       </div>
     </div>
 
+    <div class="card pending-card" id="ad-pending-card" style="margin-bottom:20px;display:none">
+      <div class="card-head">
+        <h2>${icon('userPlus', 16, 'orange')}Pending Account Approvals</h2>
+        <span class="meta" id="ad-pending-count">—</span>
+      </div>
+      <div id="ad-pending-list"></div>
+    </div>
+
     <div class="card">
       <div class="card-head"><h2>${icon('cpu', 16, 'teal')}System Health</h2><span class="meta">Live</span></div>
       <div class="card-body" id="ad-health">${skelLines(2)}</div>
     </div>`;
+
+  loadPendingApprovals(true);
 
   const [pAll, q, ls, st, h] = await Promise.allSettled([
     api('GET', '/patients?limit=9999'),

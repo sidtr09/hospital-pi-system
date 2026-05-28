@@ -113,3 +113,21 @@ CREATE TABLE IF NOT EXISTS documents (
 
 CREATE INDEX IF NOT EXISTS idx_documents_category ON documents(category);
 CREATE INDEX IF NOT EXISTS idx_documents_title    ON documents(title);
+
+-- ── User Accounts (self-signup with admin approval) ──────────────────────────
+
+CREATE TABLE IF NOT EXISTS users (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    username        TEXT    NOT NULL UNIQUE,
+    password_hash   TEXT    NOT NULL,         -- scrypt: "salt:hash" hex
+    full_name       TEXT    NOT NULL,
+    role            TEXT    NOT NULL CHECK(role IN ('Administrator','Doctor','Nurse')),
+    status          TEXT    NOT NULL DEFAULT 'pending'
+                        CHECK(status IN ('pending','approved','rejected')),
+    requested_at    TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')),
+    decided_at      TEXT,
+    decided_by      TEXT
+);
+
+CREATE INDEX IF NOT EXISTS idx_users_username ON users(username);
+CREATE INDEX IF NOT EXISTS idx_users_status   ON users(status);
