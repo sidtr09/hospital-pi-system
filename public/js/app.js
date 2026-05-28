@@ -98,6 +98,9 @@ const ICONS = {
   // System
   cpu:          '<rect x="4" y="4" width="16" height="16" rx="2"/><rect x="9" y="9" width="6" height="6"/><line x1="9" y1="1" x2="9" y2="4"/><line x1="15" y1="1" x2="15" y2="4"/><line x1="9" y1="20" x2="9" y2="23"/><line x1="15" y1="20" x2="15" y2="23"/><line x1="20" y1="9" x2="23" y2="9"/><line x1="20" y1="14" x2="23" y2="14"/><line x1="1" y1="9" x2="4" y2="9"/><line x1="1" y1="14" x2="4" y2="14"/>',
   activity:     '<polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>',
+  edit:         '<path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>',
+  trash:        '<polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/>',
+  alertCircle:  '<circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>',
 };
 
 const ICON_TONES = {
@@ -907,20 +910,132 @@ PAGES['patient-search'] = async (el) => {
         if (emptyBtn) emptyBtn.onclick = () => navigate('patient-register');
         return;
       }
+      const canEdit = currentRole === 'Administrator' || currentRole === 'Doctor';
       setHTML('ps-results', `<div class="table-wrap"><table>
-        <thead><tr><th>Reference</th><th>Name</th><th>DOB</th><th>Blood</th><th>Registered</th><th></th></tr></thead>
+        <thead><tr><th>Reference</th><th>Name</th><th>DOB</th><th>Blood</th><th>Registered</th><th style="width:1%"></th></tr></thead>
         <tbody>${data.map(p => `<tr>
           <td><span class="mono" style="font-size:12px">${escapeHtml(p.patient_ref)}</span></td>
           <td><strong>${escapeHtml(p.full_name)}</strong></td>
           <td>${escapeHtml(p.date_of_birth)}</td>
           <td>${p.blood_group ? badge(p.blood_group,'danger') : '<span class="text-faint">—</span>'}</td>
           <td class="text-mut">${fmt(p.registered_at)}</td>
-          <td><button class="btn btn-xs btn-ghost" data-pid="${p.id}" data-pname="${escapeHtml(p.full_name)}" onclick="viewNotes(this.dataset.pid, this.dataset.pname)">${icon('fileText',12)}<span>Notes</span></button></td>
+          <td style="white-space:nowrap;text-align:right">
+            <button class="btn btn-xs btn-ghost" data-pid="${p.id}" data-pname="${escapeHtml(p.full_name)}" onclick="viewNotes(this.dataset.pid, this.dataset.pname)">${icon('fileText',12)}<span>Notes</span></button>
+            ${canEdit ? `<button class="btn btn-xs btn-ghost" data-pid="${p.id}" onclick="editPatient(this.dataset.pid)" title="Edit patient">${icon('edit',12,'blue')}</button>` : ''}
+            ${canEdit ? `<button class="btn btn-xs btn-ghost" data-pid="${p.id}" data-pname="${escapeHtml(p.full_name)}" onclick="confirmDeletePatient(this.dataset.pid, this.dataset.pname)" title="Delete patient">${icon('trash',12,'red')}</button>` : ''}
+          </td>
         </tr>`).join('')}</tbody></table></div>`);
     } catch(e) { setHTML('ps-results', `<div class="alert alert-error">${escapeHtml(e.message)}</div>`); }
   });
   $('ps-input').oninput = run;
   run();
+};
+
+/* ════════════════════════════════════════════════════════════════
+   EDIT PATIENT (Admin + Doctor)
+════════════════════════════════════════════════════════════════ */
+window.editPatient = async (id) => {
+  openModal('Edit Patient', skelLines(5));
+  try {
+    const p = await api('GET', `/patients/${id}`);
+    setHTML('modal-body', `
+      <div class="form-grid">
+        <div class="form-group">
+          <label>Patient Reference</label>
+          <input value="${escapeHtml(p.patient_ref)}" disabled style="opacity:.6">
+          <span class="hint">Reference is immutable after registration</span>
+        </div>
+        <div class="form-group">
+          <label>Full Name <span class="req">*</span></label>
+          <input id="e-name" value="${escapeHtml(p.full_name||'')}">
+        </div>
+        <div class="form-group">
+          <label>Date of Birth <span class="req">*</span></label>
+          <input id="e-dob" type="date" value="${escapeHtml(p.date_of_birth||'')}">
+        </div>
+        <div class="form-group">
+          <label>Sex</label>
+          <select id="e-sex">
+            <option value="" ${!p.sex?'selected':''}>— Select —</option>
+            <option value="M" ${p.sex==='M'?'selected':''}>Male</option>
+            <option value="F" ${p.sex==='F'?'selected':''}>Female</option>
+            <option value="O" ${p.sex==='O'?'selected':''}>Other</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Blood Group</label>
+          <select id="e-blood">
+            <option value="" ${!p.blood_group?'selected':''}>— Unknown —</option>
+            ${['A+','A-','B+','B-','AB+','AB-','O+','O-'].map(g =>
+              `<option ${p.blood_group===g?'selected':''}>${g}</option>`).join('')}
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Contact Number</label>
+          <input id="e-contact" value="${escapeHtml(p.contact_number||'')}">
+        </div>
+        <div class="form-group full">
+          <label>Address</label>
+          <input id="e-address" value="${escapeHtml(p.address||'')}">
+        </div>
+        <div class="form-group full">
+          <label>Known Allergies</label>
+          <textarea id="e-allergy" rows="2">${escapeHtml(p.allergy_notes||'')}</textarea>
+        </div>
+      </div>
+      <div class="form-actions">
+        <button class="btn btn-ghost" id="e-cancel">Cancel</button>
+        <button class="btn btn-primary-accent" id="e-save">Save Changes</button>
+      </div>`);
+
+    $('e-cancel').onclick = closeModal;
+    $('e-save').onclick = async () => {
+      const payload = {
+        full_name:      $('e-name').value.trim(),
+        date_of_birth:  $('e-dob').value,
+        sex:            $('e-sex').value,
+        blood_group:    $('e-blood').value,
+        contact_number: $('e-contact').value,
+        address:        $('e-address').value,
+        allergy_notes:  $('e-allergy').value,
+      };
+      if (!payload.full_name || !payload.date_of_birth) {
+        toast('Name and DOB are required', 'warning'); return;
+      }
+      try {
+        await api('PUT', `/patients/${id}`, payload);
+        toast('Patient updated', 'success');
+        closeModal();
+        if (currentPage === 'patient-search') {
+          const ps = $('ps-input'); if (ps) ps.dispatchEvent(new Event('input'));
+        }
+      } catch(e) { toast(e.message, 'error'); }
+    };
+  } catch(e) { setHTML('modal-body', `<div class="alert alert-error">${escapeHtml(e.message)}</div>`); }
+};
+
+/* ════════════════════════════════════════════════════════════════
+   DELETE PATIENT (Admin + Doctor)
+════════════════════════════════════════════════════════════════ */
+window.confirmDeletePatient = (id, name) => {
+  openModal('Delete Patient', `
+    <div class="alert alert-error">${icon('alertCircle',16,'red')}<span>This will permanently delete the patient record, clinical notes, and any queue entries. This cannot be undone.</span></div>
+    <p style="font-size:13px;margin-bottom:16px">Delete <strong>${escapeHtml(name)}</strong>?</p>
+    <div class="form-actions">
+      <button class="btn btn-ghost" id="d-cancel">Cancel</button>
+      <button class="btn btn-danger" id="d-confirm">${icon('trash',12)}<span>Delete</span></button>
+    </div>`);
+  $('d-cancel').onclick = closeModal;
+  $('d-confirm').onclick = async () => {
+    try {
+      await api('DELETE', `/patients/${id}`);
+      toast(`Deleted: ${name}`, 'success');
+      closeModal();
+      if (currentPage === 'patient-search') {
+        const ps = $('ps-input'); if (ps) ps.dispatchEvent(new Event('input'));
+      }
+    } catch(e) { toast(e.message, 'error'); }
+  };
 };
 
 /* ════════════════════════════════════════════════════════════════

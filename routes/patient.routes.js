@@ -68,16 +68,28 @@ router.get('/:id', async (req, res, next) => {
 // PUT /api/patients/:id — update registration record
 router.put('/:id', async (req, res, next) => {
   try {
-    const { full_name, contact_number, address, blood_group, allergy_notes } = req.body;
+    const { full_name, date_of_birth, sex, contact_number, address, blood_group, allergy_notes } = req.body;
+    if (!full_name || !date_of_birth) {
+      return res.status(400).json({ error: '[ Required fields missing: full_name, date_of_birth ]' });
+    }
     const result = await db.run(
       `UPDATE patients
-       SET full_name=?, contact_number=?, address=?, blood_group=?, allergy_notes=?,
+       SET full_name=?, date_of_birth=?, sex=?, contact_number=?, address=?, blood_group=?, allergy_notes=?,
            updated_at=strftime('%Y-%m-%dT%H:%M:%SZ','now')
        WHERE id=?`,
-      [full_name, contact_number, address, blood_group, allergy_notes, req.params.id]
+      [full_name, date_of_birth, sex, contact_number, address, blood_group, allergy_notes, req.params.id]
     );
     if (result.changes === 0) return res.status(404).json({ error: '[ Patient Not Found ]' });
     res.json({ updated: true });
+  } catch (err) { next(err); }
+});
+
+// DELETE /api/patients/:id — cascade removes clinical notes + queue entries
+router.delete('/:id', async (req, res, next) => {
+  try {
+    const result = await db.run('DELETE FROM patients WHERE id = ?', [req.params.id]);
+    if (result.changes === 0) return res.status(404).json({ error: '[ Patient Not Found ]' });
+    res.json({ deleted: true });
   } catch (err) { next(err); }
 });
 
