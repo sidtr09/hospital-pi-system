@@ -226,13 +226,14 @@ const ROLE_CONFIG = {
     badge: 'Doctor',
     nav: [
       { section: 'Overview' },
-      { page: 'dashboard',      icon: 'home',      tone: 'blue',   label: 'Dashboard' },
+      { page: 'dashboard',        icon: 'home',      tone: 'blue',   label: 'Dashboard' },
       { section: 'Patients' },
-      { page: 'patient-search', icon: 'search',    tone: 'teal',   label: 'Patient Search' },
+      { page: 'patient-search',   icon: 'search',    tone: 'teal',   label: 'Patient Search' },
+      { page: 'patient-register', icon: 'userPlus',  tone: 'green',  label: 'New Patient' },
       { section: 'Clinical Flow' },
-      { page: 'triage-queue',   icon: 'ambulance', tone: 'red',    label: 'Triage Queue' },
+      { page: 'triage-queue',     icon: 'ambulance', tone: 'red',    label: 'Triage Queue' },
       { section: 'Resources' },
-      { page: 'doc-library',    icon: 'book',      tone: 'indigo', label: 'Documents' },
+      { page: 'doc-library',      icon: 'book',      tone: 'indigo', label: 'Documents' },
     ],
   },
   Nurse: {
@@ -242,6 +243,7 @@ const ROLE_CONFIG = {
       { section: 'Overview' },
       { page: 'dashboard',        icon: 'home',      tone: 'blue',   label: 'Dashboard' },
       { section: 'Patients' },
+      { page: 'patient-search',   icon: 'search',    tone: 'teal',   label: 'Patient Search' },
       { page: 'patient-register', icon: 'userPlus',  tone: 'green',  label: 'New Patient' },
       { section: 'Clinical Flow' },
       { page: 'triage-queue',     icon: 'ambulance', tone: 'red',    label: 'Triage Queue' },
@@ -316,7 +318,7 @@ function navigate(page) {
     el.classList.toggle('active', el.dataset.page === page));
   const fn = PAGES[page];
   if (fn) fn($('main-content'));
-  else $('main-content').innerHTML = `<div class="empty"><div class="icon">🚧</div><p>${page} — coming soon</p></div>`;
+  else $('main-content').innerHTML = `<div class="empty"><div class="icon">${icon('alert', 36, 'orange')}</div><p>${escapeHtml(page)} — coming soon</p></div>`;
 }
 
 /* ════════════════════════════════════════════════════════════════
@@ -675,7 +677,7 @@ async function renderDoctorDashboard(el) {
             <div class="name ellipsis">${escapeHtml(p.full_name)}</div>
             <div class="meta">${escapeHtml(p.patient_ref)} · DOB ${escapeHtml(p.date_of_birth)}</div>
           </div>
-          <button class="btn btn-xs btn-primary-accent" onclick="viewNotes(${p.id},'${escapeHtml(p.full_name).replace(/'/g,'&apos;')}')">${icon('fileText',12)}<span>Notes</span></button>
+          <button class="btn btn-xs btn-primary-accent" data-pid="${p.id}" data-pname="${escapeHtml(p.full_name)}" onclick="viewNotes(this.dataset.pid, this.dataset.pname)">${icon('fileText',12)}<span>Notes</span></button>
         </div>`).join('')
         : '<div class="empty" style="padding:24px"><p>No patients found</p></div>');
     } catch(e) { setHTML('dd-lookup-result', `<div class="alert alert-error">${escapeHtml(e.message)}</div>`); }
@@ -874,11 +876,10 @@ async function loadNurseData() {
    PATIENT SEARCH (live filter)
 ════════════════════════════════════════════════════════════════ */
 PAGES['patient-search'] = async (el) => {
-  const canRegister = ROLE_CONFIG[currentRole]?.nav.some(n => n.page === 'patient-register');
   el.innerHTML = `
     <div class="page-header">
-      <div><h1>[ Patient Search ]</h1><p>Search by name or reference — results appear as you type</p></div>
-      ${canRegister ? `<button class="btn btn-primary-accent" onclick="navigate('patient-register')">+ New Patient</button>` : ''}
+      <div><h1>Patient Search</h1><p>Search by name or reference — results appear as you type</p></div>
+      <button class="btn btn-primary-accent" id="ps-new-btn">${icon('userPlus', 14)}<span>New Patient</span></button>
     </div>
     <div class="card">
       <div class="card-body">
@@ -889,6 +890,8 @@ PAGES['patient-search'] = async (el) => {
       </div>
     </div>`;
 
+  $('ps-new-btn').onclick = () => navigate('patient-register');
+
   const run = debounce(async () => {
     if (!$('ps-input')) return;
     const q = $('ps-input').value;
@@ -898,8 +901,10 @@ PAGES['patient-search'] = async (el) => {
         setHTML('ps-results', `<div class="empty">
           <div class="icon">${icon('user', 36, 'teal')}</div>
           <p>No patients ${q ? 'match this search' : 'registered yet'}</p>
-          ${canRegister ? `<button class="btn btn-primary-accent btn-sm" onclick="navigate('patient-register')">+ Register First Patient</button>` : ''}
+          <button class="btn btn-primary-accent btn-sm" id="ps-empty-btn">${icon('userPlus', 12)}<span>Register First Patient</span></button>
         </div>`);
+        const emptyBtn = $('ps-empty-btn');
+        if (emptyBtn) emptyBtn.onclick = () => navigate('patient-register');
         return;
       }
       setHTML('ps-results', `<div class="table-wrap"><table>
@@ -910,7 +915,7 @@ PAGES['patient-search'] = async (el) => {
           <td>${escapeHtml(p.date_of_birth)}</td>
           <td>${p.blood_group ? badge(p.blood_group,'danger') : '<span class="text-faint">—</span>'}</td>
           <td class="text-mut">${fmt(p.registered_at)}</td>
-          <td><button class="btn btn-xs btn-ghost" onclick="viewNotes(${p.id},'${escapeHtml(p.full_name).replace(/'/g,'&apos;')}')">${icon('fileText',12)}Notes</button></td>
+          <td><button class="btn btn-xs btn-ghost" data-pid="${p.id}" data-pname="${escapeHtml(p.full_name)}" onclick="viewNotes(this.dataset.pid, this.dataset.pname)">${icon('fileText',12)}<span>Notes</span></button></td>
         </tr>`).join('')}</tbody></table></div>`);
     } catch(e) { setHTML('ps-results', `<div class="alert alert-error">${escapeHtml(e.message)}</div>`); }
   });
@@ -991,8 +996,8 @@ PAGES['patient-register'] = (el) => {
   const auto = `PAT-${new Date().getFullYear()}-${Math.floor(Math.random()*9000+1000)}`;
   el.innerHTML = `
     <div class="page-header">
-      <div><h1>[ New Patient ]</h1><p>Register a patient — tab through fields, then Save</p></div>
-      <button class="btn btn-secondary" onclick="navigate('patient-search')">← Back to search</button>
+      <div><h1>New Patient</h1><p>Register a patient — tab through fields, then Save</p></div>
+      <button class="btn btn-secondary" id="r-back-btn">← Back to search</button>
     </div>
     <div class="col-6040">
       <div class="card">
@@ -1087,6 +1092,7 @@ PAGES['patient-register'] = (el) => {
     } catch(e) { toast(e.message, 'error'); }
   };
 
+  $('r-back-btn').onclick  = () => navigate('patient-search');
   $('r-cancel').onclick    = () => clearForm(true);
   $('r-save-only').onclick = () => save(false);
   $('r-save-next').onclick = () => save(true);
@@ -1157,7 +1163,7 @@ PAGES['stock-ledger'] = async (el) => {
           <td class="text-mut">${i.reorder_threshold}</td>
           <td class="text-mut">${escapeHtml(i.location||'—')}</td>
           <td class="text-mut">${i.expiry_date ? fmtDateOnly(i.expiry_date) : '—'}</td>
-          <td><button class="btn btn-xs btn-ghost" onclick="openTxnModal(${i.id},'${escapeHtml(i.item_name).replace(/'/g,'&apos;')}',reloadInventory)">Transact</button></td>
+          <td><button class="btn btn-xs btn-ghost" data-iid="${i.id}" data-iname="${escapeHtml(i.item_name)}" onclick="openTxnModal(this.dataset.iid, this.dataset.iname, reloadInventory)">Transact</button></td>
         </tr>`;
       }).join('')}</tbody></table></div>`;
   };
