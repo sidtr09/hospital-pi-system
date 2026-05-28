@@ -62,6 +62,83 @@ const skelLines = n => Array.from({length: n}, (_, i) =>
 const skelRows  = n => Array.from({length: n}, () =>
   `<div class="skel skel-row"></div>`).join('');
 
+/* ─── SVG chart helpers ───────────────────────────────── */
+const TRI_COLORS = ['#fa5252', '#fd7e14', '#e67700', '#40c057', '#868e96'];
+
+function areaChart(values, opts = {}) {
+  const W = opts.width  || 720;
+  const H = opts.height || 200;
+  const padL = 32, padR = 8, padT = 14, padB = 22;
+  if (!values.length || values.every(v => v === 0))
+    return `<svg class="chart-svg" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none">
+      <text x="${W/2}" y="${H/2}" text-anchor="middle" class="tick">No activity yet</text></svg>`;
+  const max = Math.max(...values, 1);
+  const stepX = (W - padL - padR) / Math.max(values.length - 1, 1);
+  const pts = values.map((v, i) => [padL + i * stepX, padT + (H - padT - padB) * (1 - v/max)]);
+  const linePath = pts.map((p, i) => (i === 0 ? 'M' : 'L') + p[0].toFixed(1) + ',' + p[1].toFixed(1)).join(' ');
+  const areaPath = `${linePath} L${pts[pts.length-1][0].toFixed(1)},${H-padB} L${pts[0][0].toFixed(1)},${H-padB} Z`;
+  const gridY = [0.25, 0.5, 0.75, 1].map(f => padT + (H - padT - padB) * f);
+  const ticks = opts.xTicks || [];
+  return `<svg class="chart-svg" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none">
+    ${gridY.map(y => `<line class="grid-line" x1="${padL}" y1="${y}" x2="${W-padR}" y2="${y}"/>`).join('')}
+    <text x="${padL-6}" y="${padT+4}" text-anchor="end" class="tick">${max}</text>
+    <text x="${padL-6}" y="${H-padB+4}" text-anchor="end" class="tick">0</text>
+    <path d="${areaPath}" class="area"/>
+    <path d="${linePath}" class="line"/>
+    ${ticks.map((t, i) => `<text x="${padL + i * ((W-padL-padR)/Math.max(ticks.length-1,1))}" y="${H-6}" text-anchor="middle" class="tick">${t}</text>`).join('')}
+  </svg>`;
+}
+
+function donutChart(slices, size = 130, thickness = 16) {
+  const total = slices.reduce((a, b) => a + b.value, 0);
+  const r = size/2 - thickness/2;
+  const cx = size/2, cy = size/2;
+  if (!total) {
+    return `<svg width="${size}" height="${size}" class="donut-svg">
+      <circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="#e6e8ec" stroke-width="${thickness}"/>
+    </svg>`;
+  }
+  let offset = 0;
+  const C = 2 * Math.PI * r;
+  const arcs = slices.map(s => {
+    const len = (s.value/total) * C;
+    const arc = `<circle cx="${cx}" cy="${cy}" r="${r}" fill="none"
+      stroke="${s.color}" stroke-width="${thickness}"
+      stroke-dasharray="${len.toFixed(2)} ${(C-len).toFixed(2)}"
+      stroke-dashoffset="${(-offset).toFixed(2)}"
+      transform="rotate(-90 ${cx} ${cy})"/>`;
+    offset += len;
+    return arc;
+  }).join('');
+  return `<svg width="${size}" height="${size}" class="donut-svg">${arcs}</svg>`;
+}
+
+function isToday(iso) {
+  if (!iso) return false;
+  const d = new Date(iso), n = new Date();
+  return d.getFullYear()===n.getFullYear() && d.getMonth()===n.getMonth() && d.getDate()===n.getDate();
+}
+
+function lastNDays(n, isoList) {
+  const buckets = new Array(n).fill(0);
+  const today = new Date(); today.setHours(0,0,0,0);
+  const todayMs = today.getTime();
+  const day = 24*3600*1000;
+  (isoList || []).forEach(iso => {
+    if (!iso) return;
+    const d = new Date(iso); d.setHours(0,0,0,0);
+    const idx = n - 1 - Math.floor((todayMs - d.getTime())/day);
+    if (idx >= 0 && idx < n) buckets[idx]++;
+  });
+  const ticks = [];
+  const step = Math.max(1, Math.floor(n/5));
+  for (let i = 0; i < n; i += step) {
+    ticks.push(new Date(todayMs - (n-1-i)*day)
+      .toLocaleDateString('en-GB', { day:'2-digit', month:'short' }));
+  }
+  return { values: buckets, ticks };
+}
+
 /* ════════════════════════════════════════════════════════════════
    ROLE CONFIG
 ════════════════════════════════════════════════════════════════ */
@@ -256,36 +333,99 @@ PAGES['dashboard'] = (el) => {
 
 /* ─────────────── ADMIN DASHBOARD ─────────────── */
 async function renderAdminDashboard(el) {
+  const today = new Date().toLocaleDateString('en-GB',{weekday:'long', day:'numeric', month:'long'});
   el.innerHTML = `
     <div class="page-header">
       <div>
         <h1>Welcome, ${escapeHtml(currentUser?.split(' ')[0] || 'Admin')}</h1>
-        <p>System overview — ${new Date().toLocaleDateString('en-GB',{weekday:'long', day:'numeric', month:'long'})}</p>
+        <p>${today}</p>
       </div>
       <div class="page-actions">
+        <button class="pill-btn" onclick="navigate('dashboard')">📅 Today</button>
         <button class="btn btn-secondary btn-sm" onclick="navigate('dashboard')">↻ Refresh</button>
       </div>
     </div>
-    <div class="stat-grid">
-      ${['Patients','Queue Waiting','Low Stock','Staff On Duty'].map((l,i) =>
-        `<div class="stat"><div class="stat-icon ${['teal','warning','danger','success'][i]}">${['👤','🚑','⚠️','👥'][i]}</div>
-         <div><div class="stat-value" id="ad-${i}">${skelLines(1)}</div><div class="stat-label">${l}</div></div></div>`
-      ).join('')}
+
+    <!-- Polished stat tiles -->
+    <div class="stat-tiles">
+      ${[
+        ['t-gray',   'Total Patients',  'ad-0'],
+        ['t-orange', 'In Queue',        'ad-1'],
+        ['t-red',    'Low Stock',       'ad-2'],
+        ['t-green',  'Staff On Duty',   'ad-3'],
+      ].map(([t,lbl,id]) => `<div class="stat-tile ${t}">
+        <div class="lbl">${lbl}</div>
+        <div class="ring"></div>
+        <div class="num" id="${id}">—</div>
+      </div>`).join('')}
     </div>
-    <div class="col-6040" style="margin-bottom:20px">
+
+    <!-- Hero: Registration trend chart + Triage rank list -->
+    <div class="grid-7030 mb-5">
       <div class="card">
-        <div class="card-head"><h2>🚑 Active Triage Queue</h2>
+        <div class="card-head">
+          <h2>Patient Registrations</h2>
+          <span class="meta">Last 14 days</span>
+        </div>
+        <div class="card-body" id="ad-chart">${skelRows(2)}</div>
+      </div>
+      <div class="card">
+        <div class="card-head">
+          <h2>Triage Queue</h2>
+          <span class="meta">By severity</span>
+        </div>
+        <div class="card-body">
+          <div id="ad-queue-bars">${skelLines(2)}</div>
+          <div class="rank-list" id="ad-queue-rank">${skelLines(4)}</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Donut breakdowns + tables -->
+    <div class="col-6040 mb-5">
+      <div class="card">
+        <div class="card-head">
+          <h2>🚑 Active Triage Queue</h2>
           <a class="meta" href="#" onclick="event.preventDefault();navigate('triage-queue')">View all →</a>
         </div>
         <div id="ad-queue">${skelRows(4)}</div>
       </div>
       <div class="card">
-        <div class="card-head"><h2>⚠️ Critical Low Stock</h2>
+        <div class="card-head">
+          <h2>Triage Mix</h2>
+          <span class="meta">Live distribution</span>
+        </div>
+        <div class="card-body">
+          <div class="donut-wrap">
+            <div class="donut-pos" id="ad-tri-donut">${skelLines(2)}</div>
+            <div class="donut-legend" id="ad-tri-legend"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-6040 mb-5">
+      <div class="card">
+        <div class="card-head">
+          <h2>⚠️ Critical Low Stock</h2>
           <a class="meta" href="#" onclick="event.preventDefault();navigate('low-stock')">View all →</a>
         </div>
         <div id="ad-stock">${skelRows(4)}</div>
       </div>
+      <div class="card">
+        <div class="card-head">
+          <h2>Staff Mix</h2>
+          <span class="meta">Currently on duty</span>
+        </div>
+        <div class="card-body">
+          <div class="donut-wrap">
+            <div class="donut-pos" id="ad-staff-donut">${skelLines(2)}</div>
+            <div class="donut-legend" id="ad-staff-legend"></div>
+          </div>
+        </div>
+      </div>
     </div>
+
     <div class="card">
       <div class="card-head"><h2>🖥 System Health</h2><span class="meta">Live</span></div>
       <div class="card-body" id="ad-health">${skelLines(2)}</div>
@@ -299,21 +439,60 @@ async function renderAdminDashboard(el) {
     fetch('/api/health').then(r => r.json()),
   ]);
 
-  if (pAll.status==='fulfilled') setText('ad-0', pAll.value.count ?? 0);
-  if (q.status==='fulfilled') {
+  // ── Stat tiles ──
+  if (pAll.status === 'fulfilled') setText('ad-0', (pAll.value.count ?? 0).toLocaleString());
+  if (q.status === 'fulfilled')    setText('ad-1', q.value.data?.length ?? 0);
+  if (ls.status === 'fulfilled')   setText('ad-2', ls.value.alert_count ?? 0);
+  if (st.status === 'fulfilled')   setText('ad-3', st.value.data?.length ?? 0);
+
+  // ── Registration trend chart ──
+  if (pAll.status === 'fulfilled') {
+    const series = lastNDays(14, (pAll.value.data || []).map(p => p.registered_at));
+    setHTML('ad-chart', areaChart(series.values, { xTicks: series.ticks }));
+  }
+
+  // ── Triage rank list + mini bars + donut ──
+  if (q.status === 'fulfilled') {
     const rows = q.value.data || [];
-    setText('ad-1', rows.length);
+    const byLevel = [1,2,3,4,5].map(L => rows.filter(r => r.triage_level === L).length);
+    const maxLv = Math.max(...byLevel, 1);
+
+    // Mini bars
+    setHTML('ad-queue-bars', `<div class="bar-mini">
+      ${byLevel.map((v,i) => `<div class="bar" style="height:${Math.max(4,(v/maxLv)*54)}px;background:${TRI_COLORS[i]}"></div>`).join('')}
+    </div>`);
+
+    // Rank list
+    const labels = ['Immediate','Emergent','Urgent','Semi-Urgent','Non-Urgent'];
+    setHTML('ad-queue-rank', `
+      <div class="rank-head"><span>Triage Level</span><span>Cases</span></div>
+      ${byLevel.map((v,i) => `<div class="rank-row">
+        <span class="nm"><span class="tri-chip t${i+1}">T${i+1}</span> ${labels[i]}</span>
+        <span class="v">${String(v).padStart(2,'0')}</span>
+      </div>`).join('')}`);
+
+    // Active queue table (left card)
     setHTML('ad-queue', rows.length ? `<div class="table-wrap"><table>
       <thead><tr><th>Lvl</th><th>Patient</th><th>Complaint</th></tr></thead>
       <tbody>${rows.slice(0,5).map(r => `<tr class="tri-${r.triage_level} tri">
-        <td><span class="tri-num t${r.triage_level}">T${r.triage_level}</span></td>
+        <td><span class="tri-chip t${r.triage_level}">T${r.triage_level}</span></td>
         <td>${escapeHtml(r.full_name||'—')}</td>
         <td class="ellipsis" style="max-width:180px">${escapeHtml(r.chief_complaint)}</td>
       </tr>`).join('')}</tbody></table></div>`
       : `<div class="empty"><div class="icon">✅</div><p>Queue is clear</p></div>`);
+
+    // Triage donut
+    const triSlices = byLevel.map((v,i) => ({ label:`T${i+1} ${labels[i]}`, value:v, color: TRI_COLORS[i] }))
+      .filter(s => s.value > 0);
+    setHTML('ad-tri-donut', `${donutChart(triSlices)}
+      <div class="donut-center"><div class="num">${rows.length}</div><div class="lbl">Cases</div></div>`);
+    setHTML('ad-tri-legend', triSlices.length
+      ? triSlices.map(s => `<div class="lg-row"><span class="sw" style="background:${s.color}"></span>${escapeHtml(s.label)} · <strong>${s.value}</strong></div>`).join('')
+      : '<div class="text-faint" style="font-size:12px">No active cases</div>');
   }
-  if (ls.status==='fulfilled') {
-    setText('ad-2', ls.value.alert_count ?? 0);
+
+  // ── Low stock table ──
+  if (ls.status === 'fulfilled') {
     const items = ls.value.data || [];
     setHTML('ad-stock', items.length ? `<div class="table-wrap"><table>
       <thead><tr><th>Item</th><th>On hand</th><th>Threshold</th></tr></thead>
@@ -324,8 +503,27 @@ async function renderAdminDashboard(el) {
       </tr>`).join('')}</tbody></table></div>`
       : `<div class="empty"><div class="icon">✅</div><p>All stock above threshold</p></div>`);
   }
-  if (st.status==='fulfilled') setText('ad-3', st.value.data?.length ?? 0);
-  if (h.status==='fulfilled') {
+
+  // ── Staff donut ──
+  if (st.status === 'fulfilled') {
+    const staff = st.value.data || [];
+    const roleCounts = {};
+    staff.forEach(s => { roleCounts[s.role] = (roleCounts[s.role]||0) + 1; });
+    const palette = ['#228be6','#0d9488','#fd7e14','#7950f2','#fa5252','#fab005'];
+    const slices = Object.entries(roleCounts).map(([k,v], i) => ({
+      label: k.charAt(0).toUpperCase() + k.slice(1),
+      value: v,
+      color: palette[i % palette.length],
+    }));
+    setHTML('ad-staff-donut', `${donutChart(slices)}
+      <div class="donut-center"><div class="num">${staff.length}</div><div class="lbl">On Duty</div></div>`);
+    setHTML('ad-staff-legend', slices.length
+      ? slices.map(s => `<div class="lg-row"><span class="sw" style="background:${s.color}"></span>${escapeHtml(s.label)} · <strong>${s.value}</strong></div>`).join('')
+      : '<div class="text-faint" style="font-size:12px">No staff on duty</div>');
+  }
+
+  // ── System health ──
+  if (h.status === 'fulfilled') {
     const v = h.value;
     setHTML('ad-health', `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:16px">
       ${[['Status', v.status, 'color:var(--success);'],
@@ -343,35 +541,64 @@ async function renderAdminDashboard(el) {
 
 /* ─────────────── DOCTOR DASHBOARD ─────────────── */
 async function renderDoctorDashboard(el) {
+  const today = new Date().toLocaleDateString('en-GB',{weekday:'long', day:'numeric', month:'long'});
   el.innerHTML = `
     <div class="page-header">
       <div>
         <h1>Welcome, Dr. ${escapeHtml(currentUser?.split(' ').slice(-1)[0] || 'Doctor')}</h1>
-        <p>${new Date().toLocaleDateString('en-GB',{weekday:'long', day:'numeric', month:'long'})}</p>
+        <p>${today}</p>
       </div>
-      <button class="btn btn-secondary btn-sm" onclick="navigate('dashboard')">↻ Refresh</button>
+      <div class="page-actions">
+        <button class="pill-btn" onclick="navigate('dashboard')">📅 Today</button>
+        <button class="btn btn-secondary btn-sm" onclick="navigate('dashboard')">↻ Refresh</button>
+      </div>
     </div>
-    <div class="stat-grid">
-      <div class="stat"><div class="stat-icon indigo">🚑</div><div><div class="stat-value" id="dd-waiting">${skelLines(1)}</div><div class="stat-label">In Queue</div></div></div>
-      <div class="stat"><div class="stat-icon danger">🔴</div><div><div class="stat-value" id="dd-critical">${skelLines(1)}</div><div class="stat-label">Critical (T1–T2)</div></div></div>
-      <div class="stat"><div class="stat-icon indigo">👤</div><div><div class="stat-value" id="dd-mine">${skelLines(1)}</div><div class="stat-label">Assigned to Me</div></div></div>
+
+    <div class="stat-tiles" style="grid-template-columns:repeat(3,1fr)">
+      <div class="stat-tile t-blue">
+        <div class="lbl">In Queue</div>
+        <div class="ring"></div>
+        <div class="num" id="dd-waiting">—</div>
+      </div>
+      <div class="stat-tile t-red">
+        <div class="lbl">Critical (T1–T2)</div>
+        <div class="ring"></div>
+        <div class="num" id="dd-critical">—</div>
+      </div>
+      <div class="stat-tile t-violet">
+        <div class="lbl">Assigned to Me</div>
+        <div class="ring"></div>
+        <div class="num" id="dd-mine">—</div>
+      </div>
     </div>
-    <div class="col-6040">
+
+    <div class="grid-7030 mb-5">
       <div class="card">
         <div class="card-head">
-          <h2>🚑 [ Triage Priority Queue ]</h2>
+          <h2>🚑 Triage Priority Queue</h2>
           <button class="btn btn-primary-accent btn-xs" onclick="showEnqueueModal(loadDoctorQueue)">+ Add</button>
         </div>
         <div id="dd-queue">${skelRows(5)}</div>
       </div>
       <div class="card">
-        <div class="card-head"><h2>🔍 Quick Patient Lookup</h2></div>
-        <div class="card-body">
-          <div class="live-search">
-            <input id="dd-lookup" placeholder="Search by name or reference…" autofocus>
-          </div>
-          <div id="dd-lookup-result"></div>
+        <div class="card-head">
+          <h2>Queue by Severity</h2>
+          <span class="meta">Live</span>
         </div>
+        <div class="card-body">
+          <div id="dd-bars">${skelLines(2)}</div>
+          <div class="rank-list" id="dd-rank">${skelLines(4)}</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-head"><h2>🔍 Quick Patient Lookup</h2><span class="meta">Search by name or reference</span></div>
+      <div class="card-body">
+        <div class="live-search">
+          <input id="dd-lookup" placeholder="Start typing a name or reference…" autofocus>
+        </div>
+        <div id="dd-lookup-result"></div>
       </div>
     </div>`;
 
@@ -401,16 +628,30 @@ async function loadDoctorQueue() {
   try {
     const { data } = await api('GET', '/queue?status=waiting');
     const mineCount = data.filter(r => r.assigned_to === currentUser).length;
-    if ($('dd-waiting'))  $('dd-waiting').textContent  = data.length;
-    if ($('dd-critical')) $('dd-critical').textContent = data.filter(r => r.triage_level <= 2).length;
-    if ($('dd-mine'))     $('dd-mine').textContent     = mineCount;
+    setText('dd-waiting',  data.length);
+    setText('dd-critical', data.filter(r => r.triage_level <= 2).length);
+    setText('dd-mine',     mineCount);
+
+    // Queue severity bars + rank list (right side)
+    const byLevel = [1,2,3,4,5].map(L => data.filter(r => r.triage_level === L).length);
+    const maxLv = Math.max(...byLevel, 1);
+    setHTML('dd-bars', `<div class="bar-mini">
+      ${byLevel.map((v,i) => `<div class="bar" style="height:${Math.max(4,(v/maxLv)*54)}px;background:${TRI_COLORS[i]}"></div>`).join('')}
+    </div>`);
+    const labels = ['Immediate','Emergent','Urgent','Semi-Urgent','Non-Urgent'];
+    setHTML('dd-rank', `
+      <div class="rank-head"><span>Level</span><span>Cases</span></div>
+      ${byLevel.map((v,i) => `<div class="rank-row">
+        <span class="nm"><span class="tri-chip t${i+1}">T${i+1}</span> ${labels[i]}</span>
+        <span class="v">${String(v).padStart(2,'0')}</span>
+      </div>`).join('')}`);
 
     const el = $('dd-queue');
     if (!el) return;
     el.innerHTML = data.length ? `<div class="table-wrap"><table>
       <thead><tr><th>Lvl</th><th>Patient</th><th>Complaint</th><th>Assigned</th><th></th></tr></thead>
       <tbody>${data.slice(0,8).map(r => `<tr class="tri-${r.triage_level} tri">
-        <td><span class="tri-num t${r.triage_level}">T${r.triage_level}</span></td>
+        <td><span class="tri-chip t${r.triage_level}">T${r.triage_level}</span></td>
         <td>${escapeHtml(r.full_name||'—')}</td>
         <td class="ellipsis" style="max-width:140px">${escapeHtml(r.chief_complaint)}</td>
         <td>${r.assigned_to ? badge(r.assigned_to,'indigo') : badge('Unassigned','gray')}</td>
@@ -434,18 +675,34 @@ window.assignToMe = async (id) => {
 
 /* ─────────────── NURSE DASHBOARD ─────────────── */
 async function renderNurseDashboard(el) {
+  const today = new Date().toLocaleDateString('en-GB',{weekday:'long', day:'numeric', month:'long'});
   el.innerHTML = `
     <div class="page-header">
       <div>
         <h1>Welcome, ${escapeHtml(currentUser?.split(' ')[0] || 'Nurse')}</h1>
-        <p>Triage intake and ward overview</p>
+        <p>${today}</p>
       </div>
-      <button class="btn btn-secondary btn-sm" onclick="navigate('dashboard')">↻ Refresh</button>
+      <div class="page-actions">
+        <button class="pill-btn" onclick="navigate('dashboard')">📅 Today</button>
+        <button class="btn btn-secondary btn-sm" onclick="navigate('dashboard')">↻ Refresh</button>
+      </div>
     </div>
-    <div class="stat-grid">
-      <div class="stat"><div class="stat-icon rose">🚑</div><div><div class="stat-value" id="nd-waiting">${skelLines(1)}</div><div class="stat-label">Queue Waiting</div></div></div>
-      <div class="stat"><div class="stat-icon danger">⚠️</div><div><div class="stat-value" id="nd-stock">${skelLines(1)}</div><div class="stat-label">Low Stock</div></div></div>
-      <div class="stat"><div class="stat-icon success">👥</div><div><div class="stat-value" id="nd-staff">${skelLines(1)}</div><div class="stat-label">On Duty</div></div></div>
+    <div class="stat-tiles" style="grid-template-columns:repeat(3,1fr)">
+      <div class="stat-tile t-violet">
+        <div class="lbl">Queue Waiting</div>
+        <div class="ring"></div>
+        <div class="num" id="nd-waiting">—</div>
+      </div>
+      <div class="stat-tile t-red">
+        <div class="lbl">Low Stock</div>
+        <div class="ring"></div>
+        <div class="num" id="nd-stock">—</div>
+      </div>
+      <div class="stat-tile t-green">
+        <div class="lbl">On Duty</div>
+        <div class="ring"></div>
+        <div class="num" id="nd-staff">—</div>
+      </div>
     </div>
     <div class="col-4060">
       <div class="card">
@@ -539,20 +796,19 @@ async function loadNurseData() {
   ]);
   if (q.status==='fulfilled') {
     const rows = q.value.data || [];
-    if ($('nd-waiting')) $('nd-waiting').textContent = rows.length;
-    const el = $('nd-queue');
-    if (el) el.innerHTML = rows.length ? `<div class="table-wrap"><table>
+    setText('nd-waiting', rows.length);
+    setHTML('nd-queue', rows.length ? `<div class="table-wrap"><table>
       <thead><tr><th>Lvl</th><th>Patient</th><th>Complaint</th><th></th></tr></thead>
       <tbody>${rows.slice(0,7).map(r => `<tr class="tri-${r.triage_level} tri">
-        <td><span class="tri-num t${r.triage_level}">T${r.triage_level}</span></td>
+        <td><span class="tri-chip t${r.triage_level}">T${r.triage_level}</span></td>
         <td>${escapeHtml(r.full_name||'—')}</td>
         <td class="ellipsis" style="max-width:140px">${escapeHtml(r.chief_complaint)}</td>
         <td><button class="btn btn-xs btn-ghost" onclick="resolveQueue(${r.id})">Done</button></td>
       </tr>`).join('')}</tbody></table></div>`
-      : `<div class="empty"><div class="icon">✅</div><p>Queue is clear</p></div>`;
+      : `<div class="empty"><div class="icon">✅</div><p>Queue is clear</p></div>`);
   }
-  if (ls.status==='fulfilled' && $('nd-stock')) $('nd-stock').textContent = ls.value.alert_count ?? 0;
-  if (st.status==='fulfilled' && $('nd-staff')) $('nd-staff').textContent = st.value.data?.length ?? 0;
+  if (ls.status==='fulfilled') setText('nd-stock', ls.value.alert_count ?? 0);
+  if (st.status==='fulfilled') setText('nd-staff', st.value.data?.length ?? 0);
 }
 
 /* ════════════════════════════════════════════════════════════════

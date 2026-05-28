@@ -587,6 +587,163 @@ tbody tr.tri td { background: transparent; }
   font-family: inherit;
 }
 
+/* ─── Polished stat tiles (colored backgrounds, dashed underline) ────── */
+.stat-tiles {
+  display: grid; grid-template-columns: repeat(4, 1fr);
+  gap: var(--s-3); margin-bottom: var(--s-5);
+}
+.stat-tile {
+  background: var(--surface-2);
+  border-radius: var(--r-lg);
+  padding: 16px 18px;
+  position: relative;
+  min-height: 100px;
+  display: flex; flex-direction: column; justify-content: space-between;
+  border: 1px solid transparent;
+  transition: border-color .15s;
+}
+.stat-tile:hover { border-color: var(--border); }
+.stat-tile.t-gray   { background: #f1f3f5; }
+.stat-tile.t-orange { background: #fff4e6; }
+.stat-tile.t-green  { background: #ebfbee; }
+.stat-tile.t-blue   { background: #e7f5ff; }
+.stat-tile.t-red    { background: #fff5f5; }
+.stat-tile.t-violet { background: #f3f0ff; }
+.stat-tile.t-teal   { background: var(--accent-tint); }
+
+.stat-tile .lbl {
+  font-size: 12px; font-weight: 600; color: var(--text-mut);
+  letter-spacing: .2px;
+}
+.stat-tile .num {
+  font-size: 28px; font-weight: 700; letter-spacing: -.4px;
+  color: var(--text); font-variant-numeric: tabular-nums;
+  border-top: 1px dashed currentColor;
+  padding-top: 6px; margin-top: 4px;
+  width: fit-content; opacity: 1;
+}
+.stat-tile .ring {
+  position: absolute; top: 14px; right: 14px;
+  width: 26px; height: 26px; border-radius: 50%;
+  border: 3.5px solid #adb5bd; border-bottom-color: transparent;
+  opacity: .8;
+}
+.stat-tile.t-gray   .ring { border-color: #6c757d; border-bottom-color: transparent; }
+.stat-tile.t-orange .ring { border-color: #fd7e14; border-bottom-color: transparent; }
+.stat-tile.t-green  .ring { border-color: #40c057; border-bottom-color: transparent; }
+.stat-tile.t-blue   .ring { border-color: #228be6; border-bottom-color: transparent; }
+.stat-tile.t-red    .ring { border-color: #fa5252; border-bottom-color: transparent; }
+.stat-tile.t-violet .ring { border-color: #7950f2; border-bottom-color: transparent; }
+.stat-tile.t-teal   .ring { border-color: var(--accent); border-bottom-color: transparent; }
+
+.stat-tile .trend {
+  position: absolute; bottom: 14px; right: 14px;
+  font-size: 11px; font-weight: 600;
+  display: flex; align-items: center; gap: 3px;
+  color: var(--success);
+}
+.stat-tile .trend.down { color: var(--danger); }
+
+/* ─── SVG chart container ──────────────────────────────────────── */
+.chart-svg { width: 100%; height: 200px; display: block; }
+.chart-svg .grid-line { stroke: var(--border-2); stroke-dasharray: 3 4; }
+.chart-svg .area      { fill: var(--accent); fill-opacity: .12; }
+.chart-svg .line      { stroke: var(--accent); stroke-width: 2; fill: none; stroke-linecap: round; stroke-linejoin: round; }
+.chart-svg .dot       { fill: var(--accent); }
+.chart-svg .tick      { font-size: 10px; fill: var(--text-faint); font-family: inherit; }
+
+/* ─── Donut chart ──────────────────────────────────────────────── */
+.donut-wrap { display: flex; align-items: center; gap: var(--s-5); }
+.donut-svg  { flex-shrink: 0; }
+.donut-center {
+  position: absolute; inset: 0;
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  pointer-events: none;
+}
+.donut-center .num { font-size: 24px; font-weight: 700; line-height: 1; }
+.donut-center .lbl { font-size: 10px; color: var(--text-mut); text-transform: uppercase; letter-spacing: .5px; margin-top: 2px; }
+.donut-pos { position: relative; }
+.donut-legend {
+  display: flex; flex-direction: column; gap: 7px;
+  font-size: 12px; min-width: 0;
+}
+.donut-legend .lg-row {
+  display: flex; align-items: center; gap: 8px;
+  color: var(--text);
+}
+.donut-legend .sw {
+  width: 10px; height: 10px; border-radius: 3px;
+  flex-shrink: 0;
+}
+.donut-legend strong { font-weight: 700; }
+
+/* ─── Mini bar chart ──────────────────────────────────────────── */
+.bar-mini {
+  display: flex; align-items: flex-end; gap: 6px;
+  height: 64px; padding: 6px 4px 0;
+}
+.bar-mini .bar {
+  flex: 1; border-radius: 3px 3px 0 0; min-height: 4px;
+  background: var(--surface-2);
+  transition: background .15s;
+}
+
+/* ─── Rank list (matches mockup right-column) ─────────────────── */
+.rank-list { padding: 4px 0; }
+.rank-list .rank-head {
+  display: flex; justify-content: space-between;
+  font-size: 10px; color: var(--text-mut); font-weight: 700;
+  padding: 6px 0; border-bottom: 1px solid var(--border-2);
+  text-transform: uppercase; letter-spacing: .5px;
+}
+.rank-list .rank-row {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 9px 0; border-bottom: 1px solid var(--border-2);
+  font-size: 12px;
+}
+.rank-list .rank-row:last-child { border-bottom: none; }
+.rank-list .rank-row .nm { color: var(--text); font-weight: 500; display: flex; align-items: center; gap: 6px; }
+.rank-list .rank-row .v  { color: var(--text); font-weight: 700; font-variant-numeric: tabular-nums; }
+.rank-list .rank-row .dot {
+  width: 8px; height: 8px; border-radius: 50%;
+}
+
+/* ─── Triage badge (small square chip) ────────────────────────── */
+.tri-chip {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 24px; height: 24px; border-radius: 5px;
+  font-weight: 700; font-size: 11px; color: white;
+}
+.tri-chip.t1 { background: #fa5252; }
+.tri-chip.t2 { background: #fd7e14; }
+.tri-chip.t3 { background: #e67700; }
+.tri-chip.t4 { background: #40c057; }
+.tri-chip.t5 { background: #868e96; }
+
+/* ─── Card head with date pill (mockup-style) ──────────────────── */
+.pill-btn {
+  display: inline-flex; align-items: center; gap: 6px;
+  height: 34px; padding: 0 14px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  font-size: 12px; font-weight: 600; color: var(--text-mut);
+  cursor: pointer; transition: background .15s, border-color .15s;
+}
+.pill-btn:hover { background: var(--surface-2); border-color: var(--border-2); }
+
+/* Grid utilities for new layouts */
+.grid-7030 { display: grid; grid-template-columns: 7fr 3fr; gap: var(--s-5); }
+.grid-4    { display: grid; grid-template-columns: repeat(4, 1fr); gap: var(--s-4); }
+.mb-4 { margin-bottom: var(--s-4); }
+.mb-5 { margin-bottom: var(--s-5); }
+.mb-6 { margin-bottom: var(--s-6); }
+
+@media (max-width: 1100px) {
+  .stat-tiles, .grid-4 { grid-template-columns: repeat(2, 1fr); }
+  .grid-7030 { grid-template-columns: 1fr; }
+}
 @media (max-width: 960px) {
   .two-col, .three-col, .col-6040, .col-4060 { grid-template-columns: 1fr; }
   .form-grid { grid-template-columns: 1fr; }
