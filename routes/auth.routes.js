@@ -131,6 +131,40 @@ router.post('/register', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
+// ── GET /api/auth/users (admin only) — every account on the system ─────────
+router.get('/users', requireAdmin, async (req, res, next) => {
+  try {
+    const { status } = req.query;
+    let sql = `SELECT id, username, full_name, role, status,
+                      requested_at, decided_at, decided_by
+               FROM users`;
+    const params = [];
+    if (status) {
+      sql += ' WHERE status = ?';
+      params.push(status);
+    }
+    sql += ' ORDER BY requested_at DESC';
+    const dbUsers = await db.all(sql, params);
+
+    // Demo accounts (hardcoded, always "approved") — pinned to the top
+    const showDemo = !status || status === 'approved';
+    const demoRows = showDemo ? DEMO_USERS.map(u => ({
+      id:            u.id,
+      username:      u.username,
+      full_name:     u.name,
+      role:          u.role,
+      status:        'approved',
+      requested_at:  null,
+      decided_at:    null,
+      decided_by:    null,
+      is_demo:       true,
+    })) : [];
+
+    const all = [...demoRows, ...dbUsers];
+    res.json({ data: all, count: all.length });
+  } catch (err) { next(err); }
+});
+
 // ── GET /api/auth/pending (admin only) ──────────────────────────────────────
 router.get('/pending', requireAdmin, async (req, res, next) => {
   try {

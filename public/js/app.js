@@ -368,6 +368,8 @@ const ROLE_CONFIG = {
       { page: 'staff-roster',     icon: 'users',     tone: 'violet', label: 'Staff Roster' },
       { section: 'Resources' },
       { page: 'doc-library',      icon: 'book',      tone: 'indigo', label: 'Documents' },
+      { section: 'Administration' },
+      { page: 'staff-accounts',   icon: 'shieldCheck', tone: 'teal',  label: 'Staff Accounts' },
     ],
   },
   Doctor: {
@@ -1969,6 +1971,168 @@ window.showAddShiftModal = (onSuccess) => {
     } catch(e) { toast(e.message, 'error'); }
   };
 };
+
+/* ════════════════════════════════════════════════════════════════
+   STAFF ACCOUNTS (Admin only)
+════════════════════════════════════════════════════════════════ */
+PAGES['staff-accounts'] = async (el) => {
+  el.innerHTML = `
+    <div class="page-header">
+      <div><h1>Staff Accounts</h1><p>All user accounts on the system — demo, approved and pending</p></div>
+    </div>
+    <div class="card">
+      <div class="filter-row">
+        <div class="filter-input"><input id="sa-q" placeholder="Filter by name or username…" autofocus></div>
+        <select id="sa-status" style="height:36px;padding:0 12px;border:1px solid var(--border-2);border-radius:var(--r-sm);outline:none;background:var(--surface);font-size:13px">
+          <option value="">All Statuses</option>
+          <option value="approved">Approved</option>
+          <option value="pending">Pending</option>
+        </select>
+      </div>
+      <div id="sa-table">${skelRows(6)}</div>
+    </div>`;
+
+  let all = [];
+
+  const render = () => {
+    const q = ($('sa-q')?.value || '').toLowerCase().trim();
+    const rows = q ? all.filter(u =>
+      (u.full_name||'').toLowerCase().includes(q) ||
+      (u.username||'').toLowerCase().includes(q)
+    ) : all;
+
+    if (!rows.length) {
+      setHTML('sa-table', `<div class="empty"><div class="icon">${icon('users', 36, 'teal')}</div><p>No accounts match this filter</p></div>`);
+      return;
+    }
+
+    setHTML('sa-table', `<div class="table-wrap"><table>
+      <thead><tr>
+        <th style="width:1%"></th>
+        <th>Name</th>
+        <th>Username</th>
+        <th>Role</th>
+        <th>Status</th>
+        <th>Requested</th>
+        <th>Decided By</th>
+        <th style="width:1%"></th>
+      </tr></thead>
+      <tbody>${rows.map(u => `
+        <tr data-uid="${u.id}">
+          <td>
+            <span class="rail-avatar" style="display:inline-flex;width:30px;height:30px;font-size:12px;margin:0;background:${roleColor(u.role)}">
+              ${escapeHtml((u.full_name||'?').charAt(0).toUpperCase())}
+            </span>
+          </td>
+          <td><strong>${escapeHtml(u.full_name)}</strong>${u.is_demo ? ` ${badge('Demo','gray')}` : ''}</td>
+          <td><span class="mono" style="font-size:12px">@${escapeHtml(u.username)}</span></td>
+          <td>${badge(u.role, roleBadgeTone(u.role))}</td>
+          <td>${statusBadge(u.status)}</td>
+          <td class="text-mut" style="font-size:12px">${u.requested_at ? fmt(u.requested_at) : '—'}</td>
+          <td class="text-mut" style="font-size:12px">${escapeHtml(u.decided_by||'—')}</td>
+          <td style="white-space:nowrap;text-align:right">${renderActions(u)}</td>
+        </tr>`).join('')}</tbody>
+    </table></div>`);
+
+    // Wire row buttons via JS handlers
+    $('sa-table').querySelectorAll('.sa-approve').forEach(btn => {
+      btn.onclick = () => saDecide(btn, 'approve');
+    });
+    $('sa-table').querySelectorAll('.sa-reject').forEach(btn => {
+      btn.onclick = () => saDecide(btn, 'reject');
+    });
+    $('sa-table').querySelectorAll('.sa-revoke').forEach(btn => {
+      btn.onclick = () => saRevoke(btn);
+    });
+  };
+
+  const renderActions = (u) => {
+    if (u.is_demo) return '<span class="text-faint" style="font-size:11px">Demo (locked)</span>';
+    if (u.status === 'pending') {
+      return `
+        <button class="btn btn-xs btn-primary-accent sa-approve" data-uid="${u.id}" data-uname="${escapeHtml(u.full_name)}" title="Approve">${icon('check',12)}<span>Approve</span></button>
+        <button class="btn btn-xs btn-secondary sa-reject" data-uid="${u.id}" data-uname="${escapeHtml(u.full_name)}" title="Reject" style="margin-left:4px">${icon('x',12)}<span>Reject</span></button>`;
+    }
+    return `<button class="btn btn-xs btn-ghost sa-revoke" data-uid="${u.id}" data-uname="${escapeHtml(u.full_name)}" title="Revoke access">${icon('trash',12,'red')}<span>Revoke</span></button>`;
+  };
+
+  const load = async () => {
+    const status = $('sa-status').value;
+    try {
+      const res = await api('GET', `/auth/users${status ? `?status=${status}` : ''}`);
+      all = res.data || [];
+      render();
+    } catch (e) { setHTML('sa-table', `<div class="alert alert-error">${escapeHtml(e.message)}</div>`); }
+  };
+
+  // Wire filter
+  $('sa-q').oninput      = debounce(render, 150);
+  $('sa-status').onchange = load;
+  load();
+
+  // Local handlers
+  window.saDecide = async (btn, decision) => {
+    const id   = btn.dataset.uid;
+    const name = btn.dataset.uname;
+    const pair = btn.closest('tr').querySelectorAll('button');
+    pair.forEach(b => b.disabled = true);
+    btn.innerHTML = decision === 'approve' ? 'Approving…' : 'Rejecting…';
+    try {
+      if (decision === 'approve') {
+        await api('POST', `/auth/users/${id}/approve`);
+        toast(`Approved: ${name}`, 'success');
+      } else {
+        await api('DELETE', `/auth/users/${id}`);
+        toast(`Rejected: ${name}`, 'info');
+      }
+      await load();
+      refreshNotifications();
+    } catch (err) {
+      toast(err.message, 'error');
+      pair.forEach(b => b.disabled = false);
+    }
+  };
+
+  window.saRevoke = (btn) => {
+    const id   = btn.dataset.uid;
+    const name = btn.dataset.uname;
+    openModal('Revoke Access', `
+      <div class="alert alert-error">${icon('alertCircle',16,'red')}<span>This will permanently remove the account. <strong>${escapeHtml(name)}</strong> will no longer be able to sign in.</span></div>
+      <div class="form-actions">
+        <button class="btn btn-ghost" id="rv-cancel">Cancel</button>
+        <button class="btn btn-danger" id="rv-confirm">${icon('trash',12)}<span>Revoke Access</span></button>
+      </div>`);
+    $('rv-cancel').onclick = closeModal;
+    $('rv-confirm').onclick = async () => {
+      $('rv-confirm').disabled = true;
+      $('rv-confirm').innerHTML = 'Revoking…';
+      try {
+        await api('DELETE', `/auth/users/${id}`);
+        toast(`Revoked: ${name}`, 'info');
+        closeModal();
+        await load();
+        refreshNotifications();
+      } catch (err) {
+        toast(err.message, 'error');
+        $('rv-confirm').disabled = false;
+        $('rv-confirm').innerHTML = `${icon('trash',12)}<span>Revoke Access</span>`;
+      }
+    };
+  };
+};
+
+function roleColor(role) {
+  return { 'Administrator': '#0d9488', 'Doctor': '#4f46e5', 'Nurse': '#e11d48' }[role] || '#64748b';
+}
+function roleBadgeTone(role) {
+  return { 'Administrator': 'teal', 'Doctor': 'indigo', 'Nurse': 'rose' }[role] || 'gray';
+}
+function statusBadge(status) {
+  if (status === 'approved') return badge('Active',   'success');
+  if (status === 'pending')  return badge('Pending',  'warning');
+  if (status === 'rejected') return badge('Rejected', 'danger');
+  return badge(status || '—', 'gray');
+}
 
 /* ════════════════════════════════════════════════════════════════
    DOCUMENT LIBRARY
