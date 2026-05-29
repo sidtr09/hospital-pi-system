@@ -1040,6 +1040,22 @@ tbody tr.tri td { background: transparent; }
 .tri-chip.t3 { background: #e67700; }
 .tri-chip.t4 { background: #40c057; }
 .tri-chip.t5 { background: #868e96; }
+/* Colour-keyed variants used by the WHO triage form */
+.tri-chip.t-red    { background: #dc2626; }
+.tri-chip.t-yellow { background: #d97706; }
+.tri-chip.t-green  { background: #059669; }
+.tri-chip.t-black  { background: #111827; }
+
+/* Colour-keyed row tints — used in every triage table */
+.tri-row-red    td:first-child { box-shadow: inset 3px 0 0 #dc2626; }
+.tri-row-red    { background: #fef2f2; }
+.tri-row-yellow td:first-child { box-shadow: inset 3px 0 0 #d97706; }
+.tri-row-yellow { background: #fffbeb; }
+.tri-row-green  td:first-child { box-shadow: inset 3px 0 0 #059669; }
+.tri-row-green  { background: #f0fdf4; }
+.tri-row-black  td:first-child { box-shadow: inset 3px 0 0 #111827; }
+.tri-row-black  { background: #f3f4f6; opacity: .6; }
+.tri-row-black  td { color: var(--text-mut); font-style: italic; }
 
 /* ─── Card head with date pill (mockup-style) ──────────────────── */
 .pill-btn {

@@ -569,6 +569,7 @@ async function tryLogin() {
     setupGlobalSearch();
     setupNotifications();
     setupPrivacy();
+    syncDisasterMode();
     navigate('dashboard');
     toast(`Welcome back, ${name.split(' ')[0]}`, 'success');
   } catch (err) {
@@ -689,6 +690,37 @@ function maskRef(ref) {
   if (!isPrivacyOn()) return ref;
   return ref.length <= 4 ? '••••' : `••• ${ref.slice(-4)}`;
 }
+
+/* ── Disaster mode (admin toggle persisted via /api/settings) ────── */
+async function syncDisasterMode() {
+  try {
+    const { enabled } = await api('GET', '/settings/disaster-mode');
+    document.body.classList.toggle('disaster-mode', !!enabled);
+  } catch { /* nurse/doctor before the route exists in cache — silent */ }
+}
+function isDisasterMode() { return document.body.classList.contains('disaster-mode'); }
+
+/* ── Triage chip rendering — colour-first, level-fallback ───────── */
+const TRIAGE_COLOR_META = {
+  red:    { num: 'T1', tone: 'red',    label: 'Immediate'      },
+  yellow: { num: 'T3', tone: 'yellow', label: 'Urgent'         },
+  green:  { num: 'T4', tone: 'green',  label: 'Stable'         },
+  black:  { num: '✕',  tone: 'black',  label: 'Deceased'       },
+};
+// Legacy 1-5 levels map onto the 3 WHO colours. Black is reserved for
+// rows explicitly marked deceased (Disaster Mode only).
+const LEVEL_TO_COLOR = { 1: 'red', 2: 'red', 3: 'yellow', 4: 'green', 5: 'green' };
+
+function triageColorOf(row) {
+  if (row.triage_color) return row.triage_color;
+  return LEVEL_TO_COLOR[row.triage_level] || 'green';
+}
+function triageChip(row) {
+  const color = triageColorOf(row);
+  const meta  = TRIAGE_COLOR_META[color] || TRIAGE_COLOR_META.green;
+  return `<span class="tri-chip t-${color}" title="${meta.label}">${meta.num}</span>`;
+}
+function triageRowClass(row) { return `tri-row-${triageColorOf(row)}`; }
 
 function setupNotifications() {
   const wrap = $('notif-wrap');
@@ -1024,8 +1056,8 @@ async function renderAdminDashboard(el) {
     // Active queue table (left card)
     setHTML('ad-queue', rows.length ? `<div class="table-wrap"><table>
       <thead><tr><th>Lvl</th><th>Patient</th><th>Complaint</th></tr></thead>
-      <tbody>${rows.slice(0,5).map(r => `<tr class="tri-${r.triage_level} tri">
-        <td><span class="tri-chip t${r.triage_level}">T${r.triage_level}</span></td>
+      <tbody>${rows.slice(0,5).map(r => `<tr class="${triageRowClass(r)} tri">
+        <td>${triageChip(r)}</td>
         <td><span class="pii">${escapeHtml(r.full_name||'—')}</span></td>
         <td class="ellipsis" style="max-width:180px"><span class="pii">${escapeHtml(r.chief_complaint)}</span></td>
       </tr>`).join('')}</tbody></table></div>`
@@ -1207,8 +1239,8 @@ async function loadDoctorQueue() {
     if (!el) return;
     el.innerHTML = data.length ? `<div class="table-wrap"><table>
       <thead><tr><th>Lvl</th><th>Patient</th><th>Complaint</th><th>Assigned</th><th></th></tr></thead>
-      <tbody>${data.slice(0,8).map(r => `<tr class="tri-${r.triage_level} tri">
-        <td><span class="tri-chip t${r.triage_level}">T${r.triage_level}</span></td>
+      <tbody>${data.slice(0,8).map(r => `<tr class="${triageRowClass(r)} tri">
+        <td>${triageChip(r)}</td>
         <td><span class="pii">${escapeHtml(r.full_name||'—')}</span></td>
         <td class="ellipsis" style="max-width:140px"><span class="pii">${escapeHtml(r.chief_complaint)}</span></td>
         <td>${r.assigned_to ? badge(r.assigned_to,'indigo') : badge('Unassigned','gray')}</td>
@@ -1404,8 +1436,8 @@ async function loadNurseData() {
     setText('nd-waiting', rows.length);
     setHTML('nd-queue', rows.length ? `<div class="table-wrap"><table>
       <thead><tr><th>Lvl</th><th>Patient</th><th>Complaint</th><th></th></tr></thead>
-      <tbody>${rows.slice(0,7).map(r => `<tr class="tri-${r.triage_level} tri">
-        <td><span class="tri-chip t${r.triage_level}">T${r.triage_level}</span></td>
+      <tbody>${rows.slice(0,7).map(r => `<tr class="${triageRowClass(r)} tri">
+        <td>${triageChip(r)}</td>
         <td><span class="pii">${escapeHtml(r.full_name||'—')}</span></td>
         <td class="ellipsis" style="max-width:140px"><span class="pii">${escapeHtml(r.chief_complaint)}</span></td>
         <td><button class="btn btn-xs btn-ghost" onclick="resolveQueue(${r.id})">Done</button></td>
@@ -2038,9 +2070,9 @@ async function loadFullQueue() {
     const isDoctor = currentRole === 'Doctor';
     el.innerHTML = `<div class="card"><div class="table-wrap"><table>
       <thead><tr><th>Triage</th><th>Patient</th><th>Complaint</th><th>Assigned</th><th>Queued</th><th style="width:1%"></th></tr></thead>
-      <tbody>${data.map(r => `<tr class="tri-${r.triage_level} tri">
+      <tbody>${data.map(r => `<tr class="${triageRowClass(r)} tri">
         <td>
-          <span class="tri-num t${r.triage_level}">T${r.triage_level}</span>
+          ${triageChip(r)}
           <div style="font-size:10px;color:var(--text-mut);margin-top:3px">${labels[r.triage_level]}</div>
         </td>
         <td><strong><span class="pii">${escapeHtml(r.full_name||'—')}</span></strong>
@@ -2202,6 +2234,13 @@ window.showEnqueueModal = (onSuccess) => {
       <div style="font-size:12px;color:var(--text-mut);margin-top:2px" id="eq-banner-reason">Answer the assessment to compute</div>
     </div>
 
+    <!-- Only available in Disaster Mode (admin toggles in Security dashboard) -->
+    ${isDisasterMode() ? `
+    <label style="display:flex;align-items:center;gap:8px;margin-top:12px;padding:10px 14px;background:#fef2f2;border:1px solid #fecaca;border-radius:8px;cursor:pointer">
+      <input type="checkbox" id="eq-deceased">
+      <span style="font-size:13px;font-weight:600;color:#991b1b">Mark as Deceased (BLACK) — disaster mode</span>
+    </label>` : ''}
+
     <div class="form-actions">
       <button class="btn btn-ghost" onclick="closeModal()">Cancel</button>
       <button class="btn btn-primary-accent" id="eq-save">${icon('check',12)}<span>Add to Triage</span></button>
@@ -2235,13 +2274,22 @@ window.showEnqueueModal = (onSuccess) => {
       vitals_hr_bpm:   $('eq-hr').value,
       vitals_spo2_pct: $('eq-spo2').value,
     };
-    const { color, reason } = computeColorClient(flags, vitals);
+    let color, reason;
+    if ($('eq-deceased')?.checked) {
+      color  = 'black';
+      reason = 'Marked DECEASED (disaster mode)';
+    } else {
+      const r = computeColorClient(flags, vitals);
+      color  = r.color;
+      reason = r.reason;
+    }
     const c = TRIAGE_COLOR_HEX[color];
     const banner = $('eq-banner');
     banner.style.background    = c.bg;
     banner.style.borderColor   = c.border;
     banner.style.borderLeftColor = c.border;
-    $('eq-banner-label').textContent  = `${color.toUpperCase()} — ${color==='red'?'Immediate':color==='yellow'?'Urgent':'Stable'}`;
+    const label = color === 'black' ? 'Immediate' : (TRIAGE_COLOR_META[color]?.label || 'Stable');
+    $('eq-banner-label').textContent  = `${color.toUpperCase()} — ${color === 'black' ? 'DECEASED' : label}`;
     $('eq-banner-label').style.color  = c.text;
     $('eq-banner-reason').textContent = reason;
   };
@@ -2250,6 +2298,7 @@ window.showEnqueueModal = (onSuccess) => {
   WHO_EMERGENCY.forEach(q => {
     document.querySelectorAll(`input[name="eq-q-${q.key}"]`).forEach(r => r.onchange = refreshBanner);
   });
+  $('eq-deceased') && ($('eq-deceased').onchange = refreshBanner);
 
   // ── Submit ──
   $('eq-save').onclick = async () => {
@@ -2293,6 +2342,8 @@ window.showEnqueueModal = (onSuccess) => {
         drug_allergies:   $('eq-drug').value     || null,
         current_meds:     $('eq-meds').value     || null,
         medical_history:  history.concat([$('eq-hist').value].filter(Boolean)).join(','),
+        triage_color:     $('eq-deceased')?.checked ? 'black' : undefined,
+        triage_level:     $('eq-deceased')?.checked ? 5 : undefined,
       });
       toast('Patient triaged and added', 'success');
       closeModal();
@@ -2865,10 +2916,15 @@ PAGES['security-dashboard'] = async (el) => {
   paintDisaster();
   $('sd-disaster-btn').onclick = async () => {
     const next = !document.body.classList.contains('disaster-mode');
-    document.body.classList.toggle('disaster-mode', next);
-    paintDisaster();
-    toast(`Disaster mode ${next ? 'ENABLED' : 'disabled'}`, next ? 'warning' : 'success');
-    // Persistence + Phase D backend hook lands with the triage colour work.
+    const btn = $('sd-disaster-btn');
+    btn.disabled = true;
+    try {
+      await api('POST', '/settings/disaster-mode', { enabled: next ? 1 : 0 });
+      document.body.classList.toggle('disaster-mode', next);
+      paintDisaster();
+      toast(`Disaster mode ${next ? 'ENABLED' : 'disabled'}`, next ? 'warning' : 'success');
+    } catch (e) { toast(e.message, 'error'); }
+    btn.disabled = false;
   };
 };
 

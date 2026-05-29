@@ -172,3 +172,11 @@ CREATE TABLE IF NOT EXISTS audit_log (
 CREATE INDEX IF NOT EXISTS idx_audit_occurred ON audit_log(occurred_at DESC);
 CREATE INDEX IF NOT EXISTS idx_audit_actor    ON audit_log(actor_username);
 CREATE INDEX IF NOT EXISTS idx_audit_action   ON audit_log(action);
+
+-- ── System Settings (key/value store for disaster mode etc) ────────────────
+
+CREATE TABLE IF NOT EXISTS app_settings (
+    key         TEXT PRIMARY KEY,
+    value       TEXT,
+    updated_at  TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now'))
+);
