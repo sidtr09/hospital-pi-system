@@ -506,6 +506,7 @@ const ROLE_CONFIG = {
       { section: 'Inventory' },
       { page: 'stock-ledger',     icon: 'package',   tone: 'orange', label: 'Stock Ledger' },
       { page: 'low-stock',        icon: 'alert',     tone: 'red',    label: 'Low Stock' },
+      { page: 'expiring-soon',    icon: 'flask',     tone: 'orange', label: 'Expiring Soon' },
       { section: 'Clinical Flow' },
       { page: 'triage-queue',     icon: 'ambulance', tone: 'red',    label: 'Triage Queue' },
       { page: 'staff-roster',     icon: 'users',     tone: 'violet', label: 'Staff Roster' },
@@ -516,6 +517,7 @@ const ROLE_CONFIG = {
       { section: 'Administration' },
       { page: 'staff-accounts',     icon: 'shieldCheck', tone: 'teal',   label: 'Staff Accounts' },
       { page: 'security-dashboard', icon: 'shield',      tone: 'teal',   label: 'Security' },
+      { page: 'database-health',    icon: 'package',     tone: 'orange', label: 'Database Health' },
       { page: 'audit-log',          icon: 'fileText',    tone: 'gray',   label: 'Audit Log' },
       { section: 'Account' },
       { page: 'settings',         icon: 'settings',  tone: 'gray',   label: 'Settings' },
@@ -556,6 +558,7 @@ const ROLE_CONFIG = {
       { page: 'team',             icon: 'users',     tone: 'violet', label: 'Team' },
       { section: 'Inventory' },
       { page: 'stock-ledger',     icon: 'package',   tone: 'orange', label: 'Stock Ledger' },
+      { page: 'expiring-soon',    icon: 'flask',     tone: 'orange', label: 'Expiring Soon' },
       { section: 'Account' },
       { page: 'settings',         icon: 'settings',  tone: 'gray',   label: 'Settings' },
     ],
@@ -1347,6 +1350,88 @@ async function renderAdminDashboard(el) {
   }
 }
 
+function fmtBytes(n) {
+  if (n == null || !Number.isFinite(n)) return '—';
+  if (n < 1024)               return `${n} B`;
+  if (n < 1024 * 1024)        return `${(n / 1024).toFixed(0)} KB`;
+  if (n < 1024 * 1024 * 1024) return `${(n / (1024*1024)).toFixed(1)} MB`;
+  return `${(n / (1024*1024*1024)).toFixed(2)} GB`;
+}
+
+/* ════════════════════════════════════════════════════════════════
+   DATABASE HEALTH (Admin only) — SD card / DB / attachments pressure
+════════════════════════════════════════════════════════════════ */
+PAGES['database-health'] = async (el) => {
+  el.innerHTML = `
+    <div class="page-header">
+      <div><h1>Database Health</h1><p>SD card pressure, DB size and per-table row counts</p></div>
+      <button class="btn btn-secondary btn-sm" id="dbh-refresh-btn">${icon('refresh',14)}<span>Refresh</span></button>
+    </div>
+    <div class="card">
+      <div class="card-head"><h2>${icon('package',16,'orange')}Storage Snapshot</h2><span class="meta" id="dbh-meta">Loading…</span></div>
+      <div class="card-body" id="dbh-body">${skelLines(4)}</div>
+    </div>`;
+  $('dbh-refresh-btn').onclick = loadDatabaseHealth;
+  loadDatabaseHealth();
+};
+
+async function loadDatabaseHealth() {
+  try {
+    const d = await api('GET', '/system/db-health');
+    // Severity for the free-disk tile — drives colour and an inline warning
+    const free = d.disk?.free_bytes;
+    let freeTone = 'color:var(--success);';
+    let freeWarn = '';
+    if (free != null) {
+      if (free < 500 * 1024 * 1024)         { freeTone = 'color:var(--danger);';  freeWarn = ' (rotate SD soon)'; }
+      else if (free < 1024 * 1024 * 1024)   { freeTone = 'color:var(--warning);'; freeWarn = ' (running low)'; }
+    }
+    const diskUsed = (d.disk && d.disk.total_bytes)
+      ? Math.round(((d.disk.used_bytes) / d.disk.total_bytes) * 100)
+      : null;
+
+    setText('dbh-meta', `as of ${new Date(d.generated_at).toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'})}`);
+
+    const tiles = [
+      ['DB Size',     `${fmtBytes(d.db.total_bytes)}`, '', d.db.wal_bytes ? `incl. ${fmtBytes(d.db.wal_bytes)} WAL` : ''],
+      ['Attachments', `${fmtBytes(d.attachments.bytes)}`, '', `${d.attachments.files} file${d.attachments.files===1?'':'s'}`],
+      ['Logs',        `${fmtBytes(d.logs.bytes)}`,        '', `${d.logs.files} file${d.logs.files===1?'':'s'}`],
+      ['Free Disk',   `${fmtBytes(free)}${freeWarn}`,     freeTone,
+        diskUsed != null ? `${diskUsed}% used of ${fmtBytes(d.disk.total_bytes)}` : ''],
+    ];
+
+    const tilesHTML = `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:18px;margin-bottom:18px">
+      ${tiles.map(([lbl, val, sty, sub]) => `<div>
+        <div style="font-size:11px;color:var(--text-mut);text-transform:uppercase;letter-spacing:.5px">${lbl}</div>
+        <div style="font-size:20px;font-weight:700;margin-top:3px;${sty || ''}">${val}</div>
+        ${sub ? `<div style="font-size:11px;color:var(--text-faint);margin-top:2px">${sub}</div>` : ''}
+      </div>`).join('')}
+    </div>`;
+
+    const rowsTotal = d.tables.reduce((a,t) => a + (t.rows||0), 0);
+    const tableHTML = d.tables.length ? `<div style="border-top:1px solid var(--border-2);padding-top:14px">
+      <div style="font-size:11px;font-weight:700;color:var(--text-mut);text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px">
+        Rows per table · ${rowsTotal.toLocaleString()} total
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:6px 24px;font-size:13px">
+        ${d.tables.map(t => `<div style="display:flex;justify-content:space-between;border-bottom:1px dashed var(--border-2);padding:6px 0">
+          <span class="mono" style="color:var(--text-mut)">${escapeHtml(t.name)}</span>
+          <strong>${t.rows == null ? '—' : t.rows.toLocaleString()}</strong>
+        </div>`).join('')}
+      </div>
+    </div>` : '';
+
+    const dbPath = d.db.path ? `<div style="margin-top:14px;padding-top:14px;border-top:1px solid var(--border-2);font-size:12px;color:var(--text-mut)">
+        DB file: <span class="mono">${escapeHtml(d.db.path)}</span>
+      </div>` : '';
+
+    setHTML('dbh-body', tilesHTML + tableHTML + dbPath);
+  } catch (e) {
+    setText('dbh-meta', 'unavailable');
+    setHTML('dbh-body', `<div class="alert alert-error">${escapeHtml(e.message)}</div>`);
+  }
+}
+
 /* ─────────────── DOCTOR DASHBOARD ─────────────── */
 async function renderDoctorDashboard(el) {
   const today = new Date().toLocaleDateString('en-GB',{weekday:'long', day:'numeric', month:'long'});
@@ -2131,7 +2216,7 @@ PAGES['stock-ledger'] = async (el) => {
           <td class="text-mut">${i.expiry_date ? fmtDateOnly(i.expiry_date) : '—'}</td>
           <td style="white-space:nowrap">
             <button class="btn btn-xs btn-primary-accent js-add-stock" data-iid="${i.id}" data-iname="${escapeHtml(i.item_name)}">${icon('plus',12)}<span>Add</span></button>
-            <button class="btn btn-xs btn-ghost js-txn"               data-iid="${i.id}" data-iname="${escapeHtml(i.item_name)}" style="margin-left:4px">Transact</button>
+            <button class="btn btn-xs btn-secondary js-txn"            data-iid="${i.id}" data-iname="${escapeHtml(i.item_name)}" style="margin-left:4px">${icon('edit',12)}<span>Transact</span></button>
           </td>
         </tr>`;
       }).join('')}</tbody></table></div>`;
@@ -2259,33 +2344,75 @@ window.openTxnModal = (id, name, onSaved) => {
         <select id="txn-type">
           <option value="restock">Restock (+)</option>
           <option value="dispense">Dispense (−)</option>
-          <option value="adjustment">Adjustment</option>
+          <option value="adjustment">Adjustment (± stocktake correction)</option>
           <option value="expired">Mark Expired (−)</option>
         </select>
       </div>
-      <div class="form-group"><label>Quantity <span class="req">*</span></label><input id="txn-qty" type="number" min="1" value="1"></div>
+      <div class="form-group"><label>Quantity <span class="req">*</span></label>
+        <input id="txn-qty" type="number" min="1" value="1">
+        <span class="hint" id="txn-qty-hint">How many units to add or remove</span>
+      </div>
       <div class="form-group full"><label>Performed by <span class="req">*</span></label>
         <input id="txn-by" value="${escapeHtml(currentUser||'')}">
       </div>
       <div class="form-group full"><label>Notes</label><input id="txn-notes" placeholder="Optional"></div>
     </div>
     <div class="form-actions">
-      <button class="btn btn-ghost" onclick="closeModal()">Cancel</button>
+      <button class="btn btn-ghost" id="txn-cancel">Cancel</button>
       <button class="btn btn-primary-accent" id="save-txn">Record</button>
     </div>`);
+
+  // Adjustment is the one type where the user picks the sign — for everything
+  // else the sign is implied (restock adds, dispense/expired subtract).
+  const typeSel = $('txn-type');
+  const qtyIn   = $('txn-qty');
+  const hint    = $('txn-qty-hint');
+  const paintForType = () => {
+    if (typeSel.value === 'adjustment') {
+      qtyIn.removeAttribute('min');
+      qtyIn.value = qtyIn.value === '1' ? '0' : qtyIn.value;
+      hint.textContent = 'Use a positive number to increase on-hand or a negative number to decrease (e.g. -3 if the stocktake found 3 fewer than recorded).';
+    } else {
+      qtyIn.setAttribute('min', '1');
+      if (+qtyIn.value < 1) qtyIn.value = '1';
+      hint.textContent = typeSel.value === 'restock'
+        ? 'Units received — added to on-hand'
+        : 'Units to remove from on-hand';
+    }
+  };
+  typeSel.onchange = paintForType;
+  paintForType();
+
+  $('txn-cancel').onclick = closeModal;
   $('save-txn').onclick = async () => {
-    const type = $('txn-type').value;
-    const rawQty = +$('txn-qty').value;
-    const delta = (type === 'dispense' || type === 'expired') ? -rawQty : rawQty;
+    const type = typeSel.value;
+    const rawQty = +qtyIn.value;
+    if (!Number.isFinite(rawQty) || rawQty === 0) {
+      toast(type === 'adjustment' ? 'Enter a non-zero adjustment' : 'Enter a positive quantity', 'warning');
+      return;
+    }
+    let delta;
+    if (type === 'adjustment') {
+      delta = rawQty;                                  // signed — user picks direction
+    } else if (type === 'dispense' || type === 'expired') {
+      delta = -Math.abs(rawQty);                       // always subtract
+    } else {
+      delta = Math.abs(rawQty);                        // restock — always add
+    }
+    const btn = $('save-txn');
+    btn.disabled = true; btn.innerHTML = 'Saving…';
     try {
       await api('POST', `/inventory/${id}/transactions`, {
         txn_type: type, quantity_delta: delta,
         performed_by: $('txn-by').value, notes: $('txn-notes').value,
       });
-      toast('Transaction recorded', 'success');
+      toast(delta > 0 ? `Added ${delta} to ${name}` : `Removed ${Math.abs(delta)} from ${name}`, 'success');
       closeModal();
       if (onSaved) onSaved();
-    } catch(e) { toast(e.message, 'error'); }
+    } catch(e) {
+      toast(e.message, 'error');
+      btn.disabled = false; btn.innerHTML = 'Record';
+    }
   };
 };
 
@@ -2324,6 +2451,152 @@ PAGES['low-stock'] = async (el) => {
       </table></div></div>`;
   } catch(e) { $('ls-content').innerHTML = `<div class="alert alert-error">${escapeHtml(e.message)}</div>`; }
 };
+
+/* ════════════════════════════════════════════════════════════════
+   EXPIRING SOON — already-expired + expiring within 30 days
+════════════════════════════════════════════════════════════════ */
+PAGES['expiring-soon'] = async (el) => {
+  el.innerHTML = `
+    <div class="page-header">
+      <div><h1>Expiring Soon</h1><p>Pull expired stock from shelves; rotate soon-to-expire items into use first</p></div>
+      <div class="page-actions">
+        <label class="dim" style="font-size:13px;display:flex;align-items:center;gap:6px">
+          Window
+          <select id="es-window">
+            <option value="30">30 days</option>
+            <option value="60">60 days</option>
+            <option value="90">90 days</option>
+            <option value="180">6 months</option>
+          </select>
+        </label>
+        <button class="btn btn-secondary btn-sm" id="es-refresh-btn">${icon('refresh',14)}<span>Refresh</span></button>
+      </div>
+    </div>
+    <div id="es-content">${skelRows(6)}</div>`;
+
+  $('es-refresh-btn').onclick = loadExpiring;
+  $('es-window').onchange     = loadExpiring;
+  loadExpiring();
+};
+
+async function loadExpiring() {
+  const el = $('es-content');
+  if (!el) return;
+  const days = $('es-window')?.value || '30';
+  try {
+    const { data } = await api('GET', `/inventory/alerts/expiring?days=${days}&include_expired=1`);
+
+    // Day-precision math against the *date* portion of today, so an item
+    // expiring today reads as "0 days" rather than something negative.
+    const today = new Date(); today.setHours(0,0,0,0);
+    const dayMs = 86400000;
+    const enriched = data.map(i => {
+      const exp = i.expiry_date ? new Date(i.expiry_date + 'T00:00:00') : null;
+      const inDays = exp ? Math.floor((exp - today) / dayMs) : null;
+      let band;
+      if (inDays == null)   band = 'unknown';
+      else if (inDays < 0)  band = 'expired';
+      else if (inDays <= 7) band = 'week';
+      else                  band = 'month';
+      return { ...i, inDays, band };
+    });
+
+    if (!enriched.length) {
+      el.innerHTML = `<div class="card"><div class="empty">
+        <div class="icon">${icon('shieldCheck', 36, 'green')}</div><p>No items expiring within ${days} days</p>
+      </div></div>`;
+      return;
+    }
+
+    const groups = {
+      expired: enriched.filter(i => i.band === 'expired'),
+      week:    enriched.filter(i => i.band === 'week'),
+      month:   enriched.filter(i => i.band === 'month'),
+    };
+
+    const summaryPills = [
+      groups.expired.length ? `<span class="badge" style="background:#fee2e2;color:#991b1b;font-weight:700">${groups.expired.length} expired</span>` : '',
+      groups.week.length    ? `<span class="badge" style="background:#fff4e6;color:#92400e;font-weight:700">${groups.week.length} this week</span>` : '',
+      groups.month.length   ? `<span class="badge" style="background:#fffbeb;color:#854d0e;font-weight:700">${groups.month.length} within ${days} days</span>` : '',
+    ].filter(Boolean).join(' · ');
+
+    const renderBand = (title, rows, tone, accent) => {
+      if (!rows.length) return '';
+      return `<div class="card" style="margin-bottom:18px;border-left:4px solid ${accent}">
+        <div class="card-head">
+          <h2>${icon(tone === 'red' ? 'alert' : 'flask', 16, tone)}${escapeHtml(title)}</h2>
+          <span class="meta">${rows.length} item${rows.length===1?'':'s'}</span>
+        </div>
+        <div class="table-wrap"><table>
+          <thead><tr><th>Code</th><th>Item</th><th>Category</th><th>On hand</th><th>Expires</th><th>When</th><th>Location</th><th style="width:1%"></th></tr></thead>
+          <tbody>${rows.map(i => {
+            const whenLabel = i.inDays < 0 ? `${Math.abs(i.inDays)}d ago`
+                            : i.inDays === 0 ? 'today'
+                            : `in ${i.inDays}d`;
+            const whenTone  = i.inDays < 0 ? 'danger' : (i.inDays <= 7 ? 'warning' : 'info');
+            return `<tr>
+              <td><span class="mono" style="font-size:12px">${escapeHtml(i.item_code)}</span></td>
+              <td><strong>${escapeHtml(i.item_name)}</strong></td>
+              <td>${badge(i.category, 'teal')}</td>
+              <td>${i.quantity_on_hand}</td>
+              <td class="text-mut">${fmtDateOnly(i.expiry_date)}</td>
+              <td>${badge(whenLabel, whenTone)}</td>
+              <td class="text-mut">${escapeHtml(i.location || '—')}</td>
+              <td><button class="btn btn-xs btn-secondary js-pull"
+                          data-iid="${i.id}"
+                          data-iname="${escapeHtml(i.item_name)}"
+                          data-qty="${i.quantity_on_hand}"
+                          title="Write off this stock as expired">${icon('trash', 12, 'red')}<span>Pull</span></button></td>
+            </tr>`;
+          }).join('')}</tbody>
+        </table></div>
+      </div>`;
+    };
+
+    el.innerHTML = `
+      <div class="alert alert-warn" style="display:flex;align-items:center;gap:10px;margin-bottom:18px">
+        ${icon('alert', 14, 'orange')}<span>${summaryPills}</span>
+      </div>
+      ${renderBand('Expired', groups.expired, 'red', '#dc2626')}
+      ${renderBand('Expiring this week', groups.week, 'orange', '#d97706')}
+      ${renderBand(`Expiring within ${days} days`, groups.month, 'orange', '#f59e0b')}
+    `;
+
+    el.querySelectorAll('.js-pull').forEach(btn => {
+      btn.onclick = () => pullExpired(btn);
+    });
+  } catch (e) {
+    el.innerHTML = `<div class="alert alert-error">${escapeHtml(e.message)}</div>`;
+  }
+}
+
+// "Pull" = record an `expired` transaction for the full on-hand quantity,
+// driving stock to zero. Confirms first because it can't be undone with a
+// single click (the user would have to restock).
+async function pullExpired(btn) {
+  const id   = btn.dataset.iid;
+  const name = btn.dataset.iname;
+  const qty  = +btn.dataset.qty;
+  if (!qty) { toast('Already at zero on-hand', 'info'); return; }
+  if (!confirm(`Mark ${qty} of ${name} as expired? This zeros out the on-hand count.`)) return;
+
+  btn.disabled = true;
+  btn.innerHTML = 'Pulling…';
+  try {
+    await api('POST', `/inventory/${id}/transactions`, {
+      txn_type: 'expired',
+      quantity_delta: -qty,
+      performed_by: currentUser || 'system',
+      notes: 'Pulled from Expiring Soon page',
+    });
+    toast(`Pulled ${qty} of ${name} from stock`, 'success');
+    loadExpiring();
+  } catch (e) {
+    toast(e.message, 'error');
+    btn.disabled = false;
+    btn.innerHTML = `${icon('trash', 12, 'red')}<span>Pull</span>`;
+  }
+}
 
 /* ════════════════════════════════════════════════════════════════
    TRIAGE QUEUE
