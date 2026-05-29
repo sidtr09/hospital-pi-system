@@ -782,8 +782,8 @@ async function renderAdminDashboard(el) {
         <p>${today}</p>
       </div>
       <div class="page-actions">
-        <button class="pill-btn" onclick="navigate('dashboard')">${icon('calendar', 14)}<span>Today</span></button>
-        <button class="btn btn-secondary btn-sm" onclick="navigate('dashboard')">${icon('refresh', 14)}<span>Refresh</span></button>
+        <button class="pill-btn" id="ad-today-btn">${icon('calendar', 14)}<span>Today</span></button>
+        <button class="btn btn-secondary btn-sm" id="ad-refresh-btn">${icon('refresh', 14)}<span>Refresh</span></button>
       </div>
     </div>
 
@@ -883,6 +883,9 @@ async function renderAdminDashboard(el) {
       <div class="card-head"><h2>${icon('cpu', 16, 'teal')}System Health</h2><span class="meta">Live</span></div>
       <div class="card-body" id="ad-health">${skelLines(2)}</div>
     </div>`;
+
+  $('ad-today-btn').onclick   = () => navigate('dashboard');
+  $('ad-refresh-btn').onclick = () => navigate('dashboard');
 
   loadPendingApprovals(true);
   renderTasksBand('ad-tasks-band');
@@ -1005,8 +1008,8 @@ async function renderDoctorDashboard(el) {
         <p>${today}</p>
       </div>
       <div class="page-actions">
-        <button class="pill-btn" onclick="navigate('dashboard')">${icon('calendar', 14)}<span>Today</span></button>
-        <button class="btn btn-secondary btn-sm" onclick="navigate('dashboard')">${icon('refresh', 14)}<span>Refresh</span></button>
+        <button class="pill-btn" id="dd-today-btn">${icon('calendar', 14)}<span>Today</span></button>
+        <button class="btn btn-secondary btn-sm" id="dd-refresh-btn">${icon('refresh', 14)}<span>Refresh</span></button>
       </div>
     </div>
 
@@ -1060,6 +1063,9 @@ async function renderDoctorDashboard(el) {
         <div id="dd-lookup-result"></div>
       </div>
     </div>`;
+
+  $('dd-today-btn').onclick   = () => navigate('dashboard');
+  $('dd-refresh-btn').onclick = () => navigate('dashboard');
 
   renderTasksBand('dd-tasks-band');
   await loadDoctorQueue();
@@ -1188,8 +1194,8 @@ async function renderNurseDashboard(el) {
         <p>${today}</p>
       </div>
       <div class="page-actions">
-        <button class="pill-btn" onclick="navigate('dashboard')">${icon('calendar', 14)}<span>Today</span></button>
-        <button class="btn btn-secondary btn-sm" onclick="navigate('dashboard')">${icon('refresh', 14)}<span>Refresh</span></button>
+        <button class="pill-btn" id="nd-today-btn">${icon('calendar', 14)}<span>Today</span></button>
+        <button class="btn btn-secondary btn-sm" id="nd-refresh-btn">${icon('refresh', 14)}<span>Refresh</span></button>
       </div>
     </div>
     <div class="stat-tiles" style="grid-template-columns:repeat(3,1fr)">
@@ -1289,6 +1295,9 @@ async function renderNurseDashboard(el) {
       loadNurseData();
     } catch(e) { toast(e.message, 'error'); }
   };
+
+  $('nd-today-btn').onclick   = () => navigate('dashboard');
+  $('nd-refresh-btn').onclick = () => navigate('dashboard');
 
   await loadNurseData();
 }
@@ -1705,8 +1714,11 @@ PAGES['stock-ledger'] = async (el) => {
   const isAdmin = currentRole === 'Administrator';
   el.innerHTML = `
     <div class="page-header">
-      <div><h1>[ Stock Ledger ]</h1><p>Medicines, supplies and equipment</p></div>
-      ${isAdmin ? `<button class="btn btn-primary-accent" id="btn-add-item">+ Add Item</button>` : ''}
+      <div><h1>Stock Ledger</h1><p>Medicines, supplies and equipment</p></div>
+      <div class="page-actions">
+        <button class="btn btn-secondary btn-sm" id="inv-refresh-btn">${icon('refresh',14)}<span>Refresh</span></button>
+        ${isAdmin ? `<button class="btn btn-primary-accent" id="btn-add-item">${icon('plus',14)}<span>Add Item</span></button>` : ''}
+      </div>
     </div>
     <div class="card">
       <div class="card-body">
@@ -1774,6 +1786,7 @@ PAGES['stock-ledger'] = async (el) => {
 
   $('inv-q').oninput = debounce(filterAndRender, 200);
   $('inv-cat').onchange = reloadInventory;
+  $('inv-refresh-btn').onclick = () => reloadInventory();
   reloadInventory();
 
   if (isAdmin) {
@@ -1864,10 +1877,11 @@ window.openTxnModal = (id, name, onSaved) => {
 PAGES['low-stock'] = async (el) => {
   el.innerHTML = `
     <div class="page-header">
-      <div><h1>[ Low Stock Alerts ]</h1><p>Items at or below their reorder threshold</p></div>
-      <button class="btn btn-secondary btn-sm" onclick="navigate('low-stock')">${icon('refresh',14)}Refresh</button>
+      <div><h1>Low Stock Alerts</h1><p>Items at or below their reorder threshold</p></div>
+      <button class="btn btn-secondary btn-sm" id="ls-refresh-btn">${icon('refresh',14)}<span>Refresh</span></button>
     </div>
     <div id="ls-content">${skelRows(6)}</div>`;
+  $('ls-refresh-btn').onclick = () => navigate('low-stock');
   try {
     const { data, alert_count } = await api('GET', '/inventory/alerts/low-stock');
     if (!data.length) {
@@ -1899,13 +1913,15 @@ PAGES['low-stock'] = async (el) => {
 PAGES['triage-queue'] = async (el) => {
   el.innerHTML = `
     <div class="page-header">
-      <div><h1>[ Triage Priority Queue ]</h1><p>Sorted by severity, then arrival time</p></div>
+      <div><h1>Triage Priority Queue</h1><p>Sorted by severity, then arrival time</p></div>
       <div class="page-actions">
-        <button class="btn btn-secondary btn-sm" onclick="navigate('triage-queue')">${icon('refresh',14)}Refresh</button>
-        <button class="btn btn-primary-accent" onclick="showEnqueueModal(()=>navigate('triage-queue'))">+ Add to Queue</button>
+        <button class="btn btn-secondary btn-sm" id="tq-refresh-btn">${icon('refresh',14)}<span>Refresh</span></button>
+        <button class="btn btn-primary-accent" id="tq-add-btn">${icon('plus',14)}<span>Add to Queue</span></button>
       </div>
     </div>
     <div id="tq-content">${skelRows(6)}</div>`;
+  $('tq-refresh-btn').onclick = () => loadFullQueue();
+  $('tq-add-btn').onclick     = () => showEnqueueModal(() => loadFullQueue());
   await loadFullQueue();
 };
 
@@ -2013,11 +2029,15 @@ window.showEnqueueModal = (onSuccess) => {
 PAGES['staff-roster'] = async (el) => {
   el.innerHTML = `
     <div class="page-header">
-      <div><h1>[ Staff Duty Roster ]</h1><p>Currently on-duty clinical staff</p></div>
-      <button class="btn btn-primary-accent" id="add-shift">+ Add Shift</button>
+      <div><h1>Staff Duty Roster</h1><p>Currently on-duty clinical staff</p></div>
+      <div class="page-actions">
+        <button class="btn btn-secondary btn-sm" id="sr-refresh-btn">${icon('refresh',14)}<span>Refresh</span></button>
+        <button class="btn btn-primary-accent" id="add-shift">${icon('plus',14)}<span>Add Shift</span></button>
+      </div>
     </div>
     <div id="roster">${skelRows(5)}</div>`;
-  $('add-shift').onclick = () => showAddShiftModal(loadRosterPage);
+  $('add-shift').onclick      = () => showAddShiftModal(loadRosterPage);
+  $('sr-refresh-btn').onclick = () => loadRosterPage();
   loadRosterPage();
 };
 
@@ -2094,6 +2114,7 @@ PAGES['staff-accounts'] = async (el) => {
   el.innerHTML = `
     <div class="page-header">
       <div><h1>Staff Accounts</h1><p>All user accounts on the system — demo, approved and pending</p></div>
+      <button class="btn btn-secondary btn-sm" id="sa-refresh-btn">${icon('refresh',14)}<span>Refresh</span></button>
     </div>
     <div class="card">
       <div class="filter-row">
@@ -2183,6 +2204,7 @@ PAGES['staff-accounts'] = async (el) => {
   // Wire filter
   $('sa-q').oninput      = debounce(render, 150);
   $('sa-status').onchange = load;
+  $('sa-refresh-btn').onclick = () => load();
   load();
 
   // Local handlers
