@@ -1,5 +1,5 @@
 /* ─────────────────────────────────────────────────────────────────────
-   [ Website Name ] — Modern Design System
+   Cliniq — Modern Design System
    Optimized for Raspberry Pi 3B+ LAN. Minimal animations, system fonts.
 ───────────────────────────────────────────────────────────────────── */
 
@@ -147,7 +147,7 @@ table td:has(.badge),
   margin: 0 auto var(--s-4);
 }
 .login-logo svg { width: 28px; height: 28px; }
-.login-card h1 { font-size: 20px; font-weight: 700; margin-bottom: var(--s-1); }
+.login-card h1 { font-size: 36px; font-weight: 800; letter-spacing: -0.5px; margin-bottom: var(--s-1); }
 .login-card .subtitle { font-size: 13px; color: var(--text-mut); margin-bottom: var(--s-6); }
 
 .login-card label {
@@ -246,17 +246,17 @@ table td:has(.badge),
 }
 .navbar-brand {
   display: flex; align-items: center; gap: var(--s-3);
-  font-size: 14px; font-weight: 700; color: var(--text);
+  font-size: 22px; font-weight: 800; letter-spacing: -0.3px; color: var(--text);
   flex: 1;
 }
 .brand-mark {
-  width: 30px; height: 30px;
+  width: 38px; height: 38px;
   background: var(--accent-tint);
   color: var(--accent);
-  border-radius: 8px;
+  border-radius: 10px;
   display: flex; align-items: center; justify-content: center;
 }
-.brand-mark svg { width: 16px; height: 16px; }
+.brand-mark svg { width: 20px; height: 20px; }
 .navbar-right { display: flex; align-items: center; gap: var(--s-3); }
 
 .global-search {
@@ -741,6 +741,53 @@ tbody tr.tri td { background: transparent; }
   background-repeat: no-repeat; background-position: center;
 }
 
+/* Filter row at the top of a card (search + dropdowns) */
+.filter-row {
+  display: flex; align-items: center; gap: var(--s-3);
+  padding: var(--s-4) var(--s-5);
+  border-bottom: 1px solid var(--border-2);
+  background: var(--surface);
+  flex-wrap: wrap;
+}
+.filter-input { position: relative; flex: 1; min-width: 220px; }
+.filter-input input {
+  width: 100%; height: 40px; padding: 0 var(--s-4) 0 38px;
+  border: 1.5px solid var(--border); border-radius: var(--r);
+  font-size: 14px; outline: none; color: var(--text);
+  background: var(--surface);
+  transition: border-color .15s, box-shadow .15s;
+}
+.filter-input input:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-tint);
+}
+.filter-input::before {
+  content: ''; position: absolute; left: 12px; top: 50%;
+  transform: translateY(-50%);
+  width: 16px; height: 16px; pointer-events: none;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%2394a3b8' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><circle cx='11' cy='11' r='8'/><line x1='21' y1='21' x2='16.65' y2='16.65'/></svg>");
+  background-repeat: no-repeat; background-position: center;
+}
+.filter-row select,
+.filter-row input[type="date"] {
+  height: 40px; padding: 0 36px 0 14px;
+  border: 1.5px solid var(--border); border-radius: var(--r);
+  font-size: 14px; outline: none; color: var(--text);
+  background-color: var(--surface);
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2394a3b8' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'><polyline points='6 9 12 15 18 9'/></svg>");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+  appearance: none; -webkit-appearance: none;
+  cursor: pointer;
+  transition: border-color .15s, box-shadow .15s;
+}
+.filter-row input[type="date"] { background-image: none; padding-right: 14px; cursor: text; }
+.filter-row select:focus,
+.filter-row input[type="date"]:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-tint);
+}
+
 /* ─── Layout helpers ─────────────────────────────────────────── */
 .two-col   { display: grid; grid-template-columns: 1fr 1fr;   gap: var(--s-5); }
 .three-col { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: var(--s-5); }
@@ -854,6 +901,29 @@ tbody tr.tri td { background: transparent; }
 }
 .alert-warn  { background: var(--warning-soft); color: var(--warning); }
 .alert-error { background: var(--danger-soft);  color: var(--danger); }
+
+/* ─── Message attachment chip ──────────────────────────────────── */
+.msg-attach {
+  display: inline-flex; align-items: center; gap: 6px;
+  margin-top: 6px;
+  padding: 6px 10px;
+  background: var(--surface-2);
+  border: 1px solid var(--border-2);
+  border-radius: 6px;
+  font-size: 12px; color: var(--text);
+  text-decoration: none;
+  max-width: 100%;
+  transition: background .12s, border-color .12s;
+}
+.msg-attach:hover {
+  background: var(--accent-tint);
+  border-color: var(--accent);
+}
+.msg-attach-name {
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  max-width: 220px;
+}
+.msg-attach-size { color: var(--text-mut); font-size: 11px; }
 .alert-info  { background: var(--accent-tint);  color: var(--accent-dark); }
 .alert-ok    { background: var(--success-soft); color: var(--success); }
 
@@ -971,6 +1041,30 @@ tbody tr.tri td { background: transparent; }
 .chart-svg .line      { stroke: var(--accent); stroke-width: 2; fill: none; stroke-linecap: round; stroke-linejoin: round; }
 .chart-svg .dot       { fill: var(--accent); }
 .chart-svg .tick      { font-size: 10px; fill: var(--text-faint); font-family: inherit; }
+.chart-svg .chart-guide {
+  stroke: var(--text-mut); stroke-width: 1; stroke-dasharray: 3 3;
+  opacity: .55;
+}
+.chart-svg .chart-dot {
+  fill: #fff; stroke: var(--accent); stroke-width: 2.5;
+}
+
+.chart-wrap { position: relative; cursor: crosshair; }
+.chart-tip {
+  position: absolute;
+  pointer-events: none;
+  background: #1f2937;
+  color: #fff;
+  padding: 7px 10px;
+  border-radius: 6px;
+  font-size: 12px;
+  line-height: 1.35;
+  box-shadow: 0 6px 14px rgba(0,0,0,.18);
+  white-space: nowrap;
+  z-index: 4;
+}
+.chart-tip-when { color: #cbd5e1; font-size: 11px; margin-bottom: 2px; }
+.chart-tip-val  { font-weight: 600; font-size: 13px; }
 
 /* ─── Donut chart ──────────────────────────────────────────────── */
 .donut-wrap { display: flex; align-items: center; gap: var(--s-5); }

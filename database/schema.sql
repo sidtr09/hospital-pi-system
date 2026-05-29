@@ -1,4 +1,4 @@
--- [ Website Name ] — SQLite Schema
+-- Cliniq — SQLite Schema
 -- All tables use INTEGER PRIMARY KEY (rowid alias) for maximum B-tree efficiency.
 -- Indexes are placed on every foreign key and high-frequency search column.
 

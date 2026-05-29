@@ -1,4 +1,4 @@
-# [ Website Name ] — Modular Directory Map
+# Cliniq — Modular Directory Map
 > Generated from: Hospital_Pi_Website_Template.md  
 > Target: Raspberry Pi 3B+ | LAN-Only | Express.js + SQLite
 

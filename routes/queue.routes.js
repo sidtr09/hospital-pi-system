@@ -61,7 +61,8 @@ router.post('/', async (req, res, next) => {
       triage_color: explicit_color,
       vitals_temp_f, vitals_hr_bpm, vitals_bp, vitals_spo2_pct, vitals_rr,
       emergency_flags, symptoms, duration,
-      drug_allergies, current_meds, medical_history,
+      drug_allergies, food_allergies, other_allergies,
+      current_meds, medical_history,
     } = req.body;
 
     if (!patient_id || !chief_complaint) {
@@ -79,8 +80,9 @@ router.post('/', async (req, res, next) => {
           triage_color,
           vitals_temp_f, vitals_hr_bpm, vitals_bp, vitals_spo2_pct, vitals_rr,
           emergency_flags, symptoms, duration,
-          drug_allergies, current_meds, medical_history)
-       VALUES (?,?,?,?, ?, ?,?,?,?,?, ?,?,?, ?,?,?)`,
+          drug_allergies, food_allergies, other_allergies,
+          current_meds, medical_history)
+       VALUES (?,?,?,?, ?, ?,?,?,?,?, ?,?,?, ?,?,?, ?,?)`,
       [
         patient_id, level, chief_complaint, assigned_to,
         color,
@@ -88,7 +90,8 @@ router.post('/', async (req, res, next) => {
         vitals_spo2_pct ?? null, vitals_rr ?? null,
         emergency_flags ? JSON.stringify(emergency_flags) : null,
         symptoms ?? null, duration ?? null,
-        drug_allergies ?? null, current_meds ?? null,
+        drug_allergies ?? null, food_allergies ?? null, other_allergies ?? null,
+        current_meds ?? null,
         Array.isArray(medical_history) ? medical_history.join(',') : (medical_history ?? null),
       ]
     );
@@ -116,6 +119,19 @@ router.patch('/:id', async (req, res, next) => {
 router.get('/roster', async (req, res, next) => {
   try {
     const now = new Date().toISOString();
+    if (req.query.all === '1') {
+      // Full roster — every entry plus an is_active flag computed from the
+      // on_duty column and current shift window. The Staff Roster page splits
+      // these into on/off-duty sections.
+      const rows = await db.all(
+        `SELECT *,
+                (on_duty = 1 AND shift_start <= ? AND shift_end >= ?) AS is_active
+           FROM staff_roster
+          ORDER BY is_active DESC, role ASC, staff_name ASC`,
+        [now, now]
+      );
+      return res.json({ data: rows });
+    }
     const staff = await db.all(
       `SELECT * FROM staff_roster
        WHERE on_duty = 1 AND shift_start <= ? AND shift_end >= ?

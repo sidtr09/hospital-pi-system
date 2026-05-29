@@ -35,7 +35,8 @@ router.get('/', async (req, res, next) => {
 router.post('/', async (req, res, next) => {
   try {
     const { patient_ref, full_name, date_of_birth, sex,
-            contact_number, address, blood_group, allergy_notes } = req.body;
+            contact_number, address, blood_group, allergy_notes,
+            emergency_contact } = req.body;
 
     if (!patient_ref || !full_name || !date_of_birth) {
       return res.status(400).json({ error: '[ Required fields missing: patient_ref, full_name, date_of_birth ]' });
@@ -43,9 +44,9 @@ router.post('/', async (req, res, next) => {
 
     const result = await db.run(
       `INSERT INTO patients
-         (patient_ref, full_name, date_of_birth, sex, contact_number, address, blood_group, allergy_notes)
-       VALUES (?,?,?,?,?,?,?,?)`,
-      [patient_ref, full_name, date_of_birth, sex, contact_number, address, blood_group, allergy_notes]
+         (patient_ref, full_name, date_of_birth, sex, contact_number, address, blood_group, allergy_notes, emergency_contact)
+       VALUES (?,?,?,?,?,?,?,?,?)`,
+      [patient_ref, full_name, date_of_birth, sex, contact_number, address, blood_group, allergy_notes, emergency_contact]
     );
 
     await logEvent(req, 'patient.create', { target_kind: 'patient', target_id: patient_ref, detail: { id: result.lastInsertRowid } });
@@ -71,22 +72,22 @@ router.get('/:id', async (req, res, next) => {
 // PUT /api/patients/:id — update registration record
 router.put('/:id', async (req, res, next) => {
   try {
-    const { full_name, date_of_birth, sex, contact_number, address, blood_group, allergy_notes } = req.body;
+    const { full_name, date_of_birth, sex, contact_number, address, blood_group, allergy_notes, emergency_contact } = req.body;
     if (!full_name || !date_of_birth) {
       return res.status(400).json({ error: '[ Required fields missing: full_name, date_of_birth ]' });
     }
     // Snapshot the pre-update row so the audit detail can list changed fields
-    const before = await db.get('SELECT patient_ref, full_name, date_of_birth, sex, contact_number, address, blood_group, allergy_notes FROM patients WHERE id = ?', [req.params.id]);
+    const before = await db.get('SELECT patient_ref, full_name, date_of_birth, sex, contact_number, address, blood_group, allergy_notes, emergency_contact FROM patients WHERE id = ?', [req.params.id]);
     const result = await db.run(
       `UPDATE patients
-       SET full_name=?, date_of_birth=?, sex=?, contact_number=?, address=?, blood_group=?, allergy_notes=?,
+       SET full_name=?, date_of_birth=?, sex=?, contact_number=?, address=?, blood_group=?, allergy_notes=?, emergency_contact=?,
            updated_at=strftime('%Y-%m-%dT%H:%M:%SZ','now')
        WHERE id=?`,
-      [full_name, date_of_birth, sex, contact_number, address, blood_group, allergy_notes, req.params.id]
+      [full_name, date_of_birth, sex, contact_number, address, blood_group, allergy_notes, emergency_contact, req.params.id]
     );
     if (result.changes === 0) return res.status(404).json({ error: '[ Patient Not Found ]' });
 
-    const next_ = { full_name, date_of_birth, sex, contact_number, address, blood_group, allergy_notes };
+    const next_ = { full_name, date_of_birth, sex, contact_number, address, blood_group, allergy_notes, emergency_contact };
     const changed = Object.keys(next_).filter(k => (before?.[k] ?? null) !== (next_[k] ?? null));
     await logEvent(req, 'patient.update', { target_kind: 'patient', target_id: before?.patient_ref, detail: { changed } });
 
