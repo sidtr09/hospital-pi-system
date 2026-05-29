@@ -2502,7 +2502,7 @@ PAGES['doc-library'] = (el) => {
             ['calculator', 'orange', 'Calculator',         'BMI, GFR, drug dose'],
             ['book',       'indigo', 'SOPs',               'Standard operating procedures'],
             ['stethoscope','red',    'Triage Protocols',   'Emergency decision guides'],
-          ].map(([n,c,t,d]) => `<div class="doc-tile">
+          ].map(([n,c,t,d]) => `<div class="doc-tile" data-ttl="${escapeHtml(t)}">
             <div class="ico ico-${c}">${icon(n, 20, c)}</div>
             <div class="ttl">${escapeHtml(t)}</div>
             <div class="dsc">${escapeHtml(d)}</div>
@@ -2510,4 +2510,10 @@ PAGES['doc-library'] = (el) => {
         </div>
       </div>
     </div>`;
+
+  // Tiles look clickable (cursor:pointer + hover lift) — give them honest
+  // feedback until real content is loaded into /api/documents
+  el.querySelectorAll('.doc-tile').forEach(tile => {
+    tile.onclick = () => toast(`${tile.dataset.ttl} — coming soon`, 'info');
+  });
 };
