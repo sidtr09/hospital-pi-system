@@ -21,6 +21,18 @@
        url('/fonts/InterVariable-Italic.woff2') format('woff2');
 }
 
+/* ─── Fraunces (self-hosted) — page-title serif. Bundled so the Pi
+       isn't relying on Iowan Old Style / Palatino, which only ship with
+       macOS. Variable font: one file covers weights 400-700. */
+@font-face {
+  font-family: 'Fraunces';
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url('/fonts/Fraunces.woff2') format('woff2-variations'),
+       url('/fonts/Fraunces.woff2') format('woff2');
+}
+
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
 :root {
@@ -205,15 +217,10 @@ table td:has(.badge),
 /* Login/Register/Pending toggle */
 .auth-card-hidden { display: none !important; }
 .login-card select {
-  width: 100%; padding: 0 12px; height: 38px;
-  border: 1.5px solid var(--border); border-radius: var(--r);
-  font-size: 14px; outline: none; margin-bottom: var(--s-4);
-  background: var(--surface); color: var(--text);
-  transition: border-color .15s, box-shadow .15s;
-}
-.login-card select:focus {
-  border-color: var(--primary);
-  box-shadow: 0 0 0 3px var(--primary-tint);
+  width: 100%; height: 38px;
+  margin-bottom: var(--s-4);
+  /* Everything else (border, chevron, appearance reset) inherits from the
+     global `select` rule so login matches every other dropdown. */
 }
 .auth-toggle {
   margin-top: var(--s-4);
@@ -261,6 +268,15 @@ table td:has(.badge),
   border-bottom: 1px solid rgba(14, 17, 22, 0.08);
   display: flex; align-items: center; padding: 0 var(--s-5);
   z-index: 50;
+}
+/* Older Chromium on Raspberry Pi OS doesn't ship backdrop-filter — without
+   this fallback the nav reads as a half-faded bar with no lift. Use a solid
+   surface so it still feels grounded. */
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .navbar {
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+  }
 }
 .navbar-brand {
   display: flex; align-items: center; gap: var(--s-3);
@@ -700,13 +716,19 @@ tbody tr.tri td { background: transparent; }
 }
 .form-group label .req { color: var(--danger); }
 .form-group input,
-.form-group select,
 .form-group textarea {
   padding: 0 var(--s-3); height: 36px;
   border: 1.5px solid var(--border); border-radius: var(--r);
   font-size: 13px; outline: none; color: var(--text);
   background: var(--surface);
   transition: border-color .15s, box-shadow .15s;
+}
+.form-group select {
+  /* Inherits the global appearance: none + chevron + border + focus ring;
+     only override the dimensions to match the denser form-group inputs. */
+  height: 36px;
+  padding: 0 32px 0 var(--s-3);
+  font-size: 13px;
 }
 .form-group textarea { padding: 8px var(--s-3); height: auto; resize: vertical; min-height: 60px; }
 .form-group input:focus,
@@ -787,8 +809,10 @@ tbody tr.tri td { background: transparent; }
   background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%2394a3b8' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><circle cx='11' cy='11' r='8'/><line x1='21' y1='21' x2='16.65' y2='16.65'/></svg>");
   background-repeat: no-repeat; background-position: center;
 }
-.filter-row select,
-.filter-row input[type="date"] {
+/* Global form-control styling — make every <select> and date input render
+   identically across macOS Safari, Chrome, and Chromium-on-Pi instead of
+   falling back to the platform's native widget. */
+select {
   height: 40px; padding: 0 36px 0 14px;
   border: 1.5px solid var(--border); border-radius: var(--r);
   font-size: 14px; outline: none; color: var(--text);
@@ -796,13 +820,24 @@ tbody tr.tri td { background: transparent; }
   background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2394a3b8' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'><polyline points='6 9 12 15 18 9'/></svg>");
   background-repeat: no-repeat;
   background-position: right 12px center;
-  appearance: none; -webkit-appearance: none;
+  appearance: none; -webkit-appearance: none; -moz-appearance: none;
   cursor: pointer;
   transition: border-color .15s, box-shadow .15s;
 }
-.filter-row input[type="date"] { background-image: none; padding-right: 14px; cursor: text; }
-.filter-row select:focus,
-.filter-row input[type="date"]:focus {
+input[type="date"], input[type="datetime-local"], input[type="time"] {
+  height: 40px; padding: 0 14px;
+  border: 1.5px solid var(--border); border-radius: var(--r);
+  font-size: 14px; outline: none; color: var(--text);
+  background-color: var(--surface);
+  appearance: none; -webkit-appearance: none;
+  transition: border-color .15s, box-shadow .15s;
+  /* Chromium-on-Pi otherwise shrinks date pickers to a different baseline */
+  font-family: inherit;
+}
+select:focus,
+input[type="date"]:focus,
+input[type="datetime-local"]:focus,
+input[type="time"]:focus {
   border-color: var(--accent);
   box-shadow: 0 0 0 3px var(--accent-tint);
 }
