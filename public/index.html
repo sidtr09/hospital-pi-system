@@ -63,7 +63,11 @@
     </select>
 
     <label for="r-password">Password</label>
-    <input id="r-password" type="password" placeholder="At least 6 characters">
+    <input id="r-password" type="password" placeholder="At least 12 characters">
+    <div class="pw-meter" id="r-meter" style="margin-bottom:14px">
+      <div class="pw-meter-bar"><div class="pw-meter-fill" id="r-meter-fill" style="width:0%"></div></div>
+      <div class="pw-meter-label" id="r-meter-label">At least 12 characters · mix upper, lower, digits, symbols</div>
+    </div>
 
     <button class="btn-primary" id="register-btn">Submit Request</button>
     <div class="login-error" id="register-error"></div>

@@ -2,7 +2,10 @@
 
 const express = require('express');
 const crypto  = require('node:crypto');
+const bcrypt  = require('bcryptjs');
 const db      = require('../database/db');
+
+const PASSWORD_MIN_LENGTH = 12;
 
 const router = express.Router();
 
@@ -13,20 +16,48 @@ const DEMO_USERS = [
   { id: -3, username: 'nurse',  password: 'nurse123',  role: 'Nurse',         name: 'Nurse Patel' },
 ];
 
-// ── Password hashing (scrypt — built-in, no native deps) ────────────────────
+// ── Password hashing (bcrypt for new hashes; scrypt verify kept for
+//     backward compatibility with anything stored before this upgrade) ───────
+const BCRYPT_ROUNDS = 12;
+
 function hashPassword(password) {
-  const salt = crypto.randomBytes(16).toString('hex');
-  const hash = crypto.scryptSync(password, salt, 64).toString('hex');
-  return `${salt}:${hash}`;
+  // bcryptjs is pure-JS, so it works on the Pi without a native compile.
+  return bcrypt.hashSync(password, BCRYPT_ROUNDS);
 }
+
 function verifyPassword(password, stored) {
-  if (!stored || !stored.includes(':')) return false;
-  const [salt, hash] = stored.split(':');
-  const check = crypto.scryptSync(password, salt, 64).toString('hex');
-  // Constant-time compare to avoid timing attacks
-  const a = Buffer.from(hash, 'hex');
-  const b = Buffer.from(check, 'hex');
-  return a.length === b.length && crypto.timingSafeEqual(a, b);
+  if (!stored) return false;
+  // New format: bcrypt hashes start with $2a$, $2b$ or $2y$
+  if (stored.startsWith('$2')) {
+    try { return bcrypt.compareSync(password, stored); }
+    catch { return false; }
+  }
+  // Legacy: scrypt hex "salt:hash" — still verify so old accounts keep working.
+  if (stored.includes(':')) {
+    const [salt, hash] = stored.split(':');
+    try {
+      const check = crypto.scryptSync(password, salt, 64).toString('hex');
+      const a = Buffer.from(hash, 'hex');
+      const b = Buffer.from(check, 'hex');
+      return a.length === b.length && crypto.timingSafeEqual(a, b);
+    } catch { return false; }
+  }
+  return false;
+}
+
+function passwordStrength(pw) {
+  if (!pw) return { score: 0, label: 'Empty', tone: 'gray' };
+  let score = 0;
+  if (pw.length >= 8)  score++;
+  if (pw.length >= 12) score++;
+  if (pw.length >= 16) score++;
+  if (/[a-z]/.test(pw) && /[A-Z]/.test(pw)) score++;
+  if (/\d/.test(pw)) score++;
+  if (/[^a-zA-Z0-9]/.test(pw)) score++;
+  if (score <= 2) return { score, label: 'Weak',     tone: 'red'    };
+  if (score <= 4) return { score, label: 'Medium',   tone: 'orange' };
+  if (score <= 5) return { score, label: 'Strong',   tone: 'green'  };
+  return            { score, label: 'Very Strong', tone: 'teal'   };
 }
 
 // ── Middleware: require Administrator role on the session ────────────────────
@@ -109,11 +140,14 @@ router.post('/change-password', async (req, res, next) => {
     if (!current_password || !new_password) {
       return res.status(400).json({ error: 'Current and new passwords are required' });
     }
-    if (new_password.length < 6) {
-      return res.status(400).json({ error: 'New password must be at least 6 characters' });
+    if (new_password.length < PASSWORD_MIN_LENGTH) {
+      return res.status(400).json({ error: `New password must be at least ${PASSWORD_MIN_LENGTH} characters` });
     }
     if (current_password === new_password) {
       return res.status(400).json({ error: 'New password must be different from your current one' });
+    }
+    if (passwordStrength(new_password).tone === 'red') {
+      return res.status(400).json({ error: 'New password is too weak — mix upper, lower, digits and symbols' });
     }
 
     const me = req.session.userUsername;
@@ -164,6 +198,18 @@ router.post('/change-password', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
+// ── POST /api/auth/password-strength — public so login + register can use it
+//     to show live "Weak / Medium / Strong / Very Strong" feedback while
+//     typing. Returns the same struct the server uses to enforce minimums. ───
+router.post('/password-strength', (req, res) => {
+  const pw = (req.body && req.body.password) || '';
+  res.json({
+    min:      PASSWORD_MIN_LENGTH,
+    length:   pw.length,
+    strength: passwordStrength(pw),
+  });
+});
+
 router.get('/me', (req, res) => {
   if (!req.session?.userId) return res.status(401).json({ error: 'Not logged in' });
   res.json({ name: req.session.userName, role: req.session.userRole });
@@ -176,8 +222,11 @@ router.post('/register', async (req, res, next) => {
     if (!username || !password || !full_name || !role) {
       return res.status(400).json({ error: 'Username, password, name and role are required' });
     }
-    if (password.length < 6) {
-      return res.status(400).json({ error: 'Password must be at least 6 characters' });
+    if (password.length < PASSWORD_MIN_LENGTH) {
+      return res.status(400).json({ error: `Password must be at least ${PASSWORD_MIN_LENGTH} characters` });
+    }
+    if (passwordStrength(password).tone === 'red') {
+      return res.status(400).json({ error: 'Password is too weak — mix upper, lower, digits and symbols' });
     }
     if (!['Administrator', 'Doctor', 'Nurse'].includes(role)) {
       return res.status(400).json({ error: 'Invalid role' });

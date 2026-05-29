@@ -663,6 +663,20 @@ tbody tr.tri td { background: transparent; }
 }
 .form-group .hint { font-size: 11px; color: var(--text-faint); }
 
+/* Password strength meter */
+.pw-meter { margin-top: 6px; display: flex; flex-direction: column; gap: 5px; }
+.pw-meter-bar {
+  height: 4px; background: var(--border-2);
+  border-radius: 2px; overflow: hidden;
+}
+.pw-meter-fill {
+  height: 100%; width: 0%; background: var(--text-faint);
+  transition: width .15s ease, background-color .15s ease;
+}
+.pw-meter-label {
+  font-size: 11px; color: var(--text-mut); font-weight: 500;
+}
+
 .form-actions {
   display: flex; gap: var(--s-2); justify-content: flex-end;
   margin-top: var(--s-5); padding-top: var(--s-4);

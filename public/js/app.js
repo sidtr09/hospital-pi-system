@@ -28,6 +28,43 @@ function debounce(fn, ms = 300) {
   return (...a) => { clearTimeout(t); t = setTimeout(() => fn(...a), ms); };
 }
 
+// Client-side mirror of the server's passwordStrength() so the meter can
+// update instantly while typing (no round-trip needed). Same algorithm.
+const PASSWORD_MIN_LENGTH = 12;
+function passwordStrength(pw) {
+  if (!pw) return { score: 0, label: 'Empty', tone: 'gray', pct: 0 };
+  let s = 0;
+  if (pw.length >= 8)  s++;
+  if (pw.length >= PASSWORD_MIN_LENGTH) s++;
+  if (pw.length >= 16) s++;
+  if (/[a-z]/.test(pw) && /[A-Z]/.test(pw)) s++;
+  if (/\d/.test(pw)) s++;
+  if (/[^a-zA-Z0-9]/.test(pw)) s++;
+  const pct = Math.round((s / 6) * 100);
+  if (s <= 2) return { score: s, label: 'Weak',        tone: 'red',    pct };
+  if (s <= 4) return { score: s, label: 'Medium',      tone: 'orange', pct };
+  if (s <= 5) return { score: s, label: 'Strong',      tone: 'green',  pct };
+  return            { score: s, label: 'Very Strong', tone: 'teal',   pct };
+}
+
+function paintMeter(fillEl, labelEl, pw) {
+  if (!fillEl || !labelEl) return;
+  const s = passwordStrength(pw);
+  const colors = { red:'#dc2626', orange:'#d97706', green:'#059669', teal:'#0d9488', gray:'#94a3b8' };
+  fillEl.style.width      = `${s.pct}%`;
+  fillEl.style.background = colors[s.tone] || colors.gray;
+  if (!pw) {
+    labelEl.textContent = `At least ${PASSWORD_MIN_LENGTH} characters · mix upper, lower, digits, symbols`;
+    labelEl.style.color = 'var(--text-mut)';
+  } else {
+    const need = Math.max(0, PASSWORD_MIN_LENGTH - pw.length);
+    labelEl.textContent = need > 0
+      ? `${s.label} · ${need} more character${need===1?'':'s'} needed`
+      : `${s.label}`;
+    labelEl.style.color = colors[s.tone] || colors.gray;
+  }
+}
+
 function fmt(iso) {
   if (!iso) return '—';
   const d = new Date(iso);
@@ -567,6 +604,7 @@ $('login-btn').onclick    = tryLogin;
 $('register-btn').onclick = tryRegister;
 $('password').onkeydown   = e => { if (e.key === 'Enter') tryLogin(); };
 $('r-password').onkeydown = e => { if (e.key === 'Enter') tryRegister(); };
+$('r-password').oninput   = () => paintMeter($('r-meter-fill'), $('r-meter-label'), $('r-password').value);
 $('show-register').onclick = () => { setText('login-error',''); showAuthCard('register'); };
 $('show-login').onclick    = () => { setText('register-error',''); showAuthCard('login'); };
 $('pending-back').onclick  = () => showAuthCard('login');
@@ -2532,7 +2570,10 @@ PAGES['settings'] = (el) => {
             <div class="form-group">
               <label>New Password <span class="req">*</span></label>
               <input id="st-new" type="password" autocomplete="new-password">
-              <span class="hint">At least 6 characters</span>
+              <div class="pw-meter" id="st-meter">
+                <div class="pw-meter-bar"><div class="pw-meter-fill" id="st-meter-fill" style="width:0%"></div></div>
+                <div class="pw-meter-label" id="st-meter-label">At least 12 characters · mix upper, lower, digits, symbols</div>
+              </div>
             </div>
             <div class="form-group">
               <label>Confirm New Password <span class="req">*</span></label>
@@ -2574,8 +2615,16 @@ PAGES['settings'] = (el) => {
   $('st-clear').onclick = () => {
     ['st-current','st-new','st-confirm'].forEach(id => $(id).value = '');
     setHTML('st-msg', '');
+    paintMeter($('st-meter-fill'), $('st-meter-label'), '');
     $('st-current').focus();
   };
+
+  // Live strength meter — debounced to avoid hammering the endpoint
+  const onMeterInput = debounce(() => {
+    const pw = $('st-new').value;
+    paintMeter($('st-meter-fill'), $('st-meter-label'), pw);
+  }, 120);
+  $('st-new').oninput = onMeterInput;
 
   $('st-save').onclick = async () => {
     const current = $('st-current').value;
