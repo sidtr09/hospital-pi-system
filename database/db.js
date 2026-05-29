@@ -43,6 +43,15 @@ const MIGRATIONS = [
   "ALTER TABLE queue_entries ADD COLUMN current_meds       TEXT",
   "ALTER TABLE queue_entries ADD COLUMN medical_history    TEXT",
   "ALTER TABLE queue_entries ADD COLUMN triage_color       TEXT",
+  // Phase E: complete WHO triage form parity
+  "ALTER TABLE patients       ADD COLUMN emergency_contact TEXT",
+  "ALTER TABLE queue_entries  ADD COLUMN food_allergies    TEXT",
+  "ALTER TABLE queue_entries  ADD COLUMN other_allergies   TEXT",
+  // Phase F: message file attachments
+  "ALTER TABLE messages       ADD COLUMN attachment_path   TEXT",
+  "ALTER TABLE messages       ADD COLUMN attachment_name   TEXT",
+  "ALTER TABLE messages       ADD COLUMN attachment_mime   TEXT",
+  "ALTER TABLE messages       ADD COLUMN attachment_size   INTEGER",
 ];
 
 function runOne(db, sql) {

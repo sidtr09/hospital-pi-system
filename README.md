@@ -1,4 +1,4 @@
-# [ Website Name ] — Hospital Management System
+# Cliniq — Hospital Management System
 
 A lightweight, LAN-only hospital management platform designed to run entirely on a **Raspberry Pi 3B+** inside a medical facility — no internet connection required.
 
@@ -89,7 +89,7 @@ You should see:
 ```
 [DB] Schema applied successfully
 [DB] Connected: .../database/hospital.db
-[ Website Name ] running on http://0.0.0.0:3000
+Cliniq running on http://0.0.0.0:3000
 ```
 
 ### Step 8 — Access from any device on the LAN
@@ -128,7 +128,7 @@ Paste:
 
 ```ini
 [Unit]
-Description=[ Website Name ] Hospital Management System
+Description=Cliniq Hospital Management System
 After=network.target
 
 [Service]

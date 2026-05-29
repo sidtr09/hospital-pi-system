@@ -1,5 +1,5 @@
 /**
- * [ Website Name ] — Centralized Application Configuration
+ * Cliniq — Centralized Application Configuration
  * All environment-sensitive values are resolved here.
  * On Pi deployments, override via process environment variables or a .env file.
  */

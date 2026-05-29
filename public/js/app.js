@@ -309,7 +309,7 @@ async function renderTasksBand(elId) {
   if (!tiles.length) { el.style.display = 'none'; return; }
   el.style.display = '';
   el.innerHTML = tiles.map(t => `
-    <div class="task-card tone-${t.tone}" data-page="${t.page}" onclick="onNotifClick(this)">
+    <div class="task-card tone-${t.tone}" data-page="${t.page}">
       <div class="ico-wrap">${icon(t.icon, 18, t.tone)}</div>
       <div>
         <div class="ttl">${escapeHtml(t.ttl)}</div>
@@ -317,6 +317,13 @@ async function renderTasksBand(elId) {
       </div>
       <div class="num">${t.num}</div>
     </div>`).join('');
+  // CSP blocks inline onclick — bind each tile to navigate on click.
+  el.querySelectorAll('.task-card').forEach(card => {
+    card.onclick = () => {
+      const page = card.dataset.page;
+      if (page) navigate(page);
+    };
+  });
 }
 
 function areaChart(values, opts = {}) {
@@ -333,15 +340,99 @@ function areaChart(values, opts = {}) {
   const areaPath = `${linePath} L${pts[pts.length-1][0].toFixed(1)},${H-padB} L${pts[0][0].toFixed(1)},${H-padB} Z`;
   const gridY = [0.25, 0.5, 0.75, 1].map(f => padT + (H - padT - padB) * f);
   const ticks = opts.xTicks || [];
-  return `<svg class="chart-svg" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none">
-    ${gridY.map(y => `<line class="grid-line" x1="${padL}" y1="${y}" x2="${W-padR}" y2="${y}"/>`).join('')}
-    <text x="${padL-6}" y="${padT+4}" text-anchor="end" class="tick">${max}</text>
-    <text x="${padL-6}" y="${H-padB+4}" text-anchor="end" class="tick">0</text>
-    <path d="${areaPath}" class="area"/>
-    <path d="${linePath}" class="line"/>
-    ${ticks.map((t, i) => `<text x="${padL + i * ((W-padL-padR)/Math.max(ticks.length-1,1))}" y="${H-6}" text-anchor="middle" class="tick">${t}</text>`).join('')}
-  </svg>`;
+  // Per-point metadata for the hover tooltip — encoded once into the wrapper so
+  // the delegated mousemove handler can read it without another DOM query.
+  const dayLabels = opts.dayLabels || [];
+  const valueLabel = opts.valueLabel || 'value';
+  const ptsMeta = pts.map((p, i) => ({
+    x: +p[0].toFixed(1),
+    y: +p[1].toFixed(1),
+    v: values[i],
+    l: dayLabels[i] || '',
+  }));
+  const meta = escapeHtml(JSON.stringify({
+    pts: ptsMeta, W, H, padL, padR, padT, padB, valueLabel,
+  }));
+  return `<div class="chart-wrap" data-chart='${meta}'>
+    <svg class="chart-svg" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none">
+      ${gridY.map(y => `<line class="grid-line" x1="${padL}" y1="${y}" x2="${W-padR}" y2="${y}"/>`).join('')}
+      <text x="${padL-6}" y="${padT+4}" text-anchor="end" class="tick">${max}</text>
+      <text x="${padL-6}" y="${H-padB+4}" text-anchor="end" class="tick">0</text>
+      <path d="${areaPath}" class="area"/>
+      <path d="${linePath}" class="line"/>
+      ${ticks.map((t, i) => `<text x="${padL + i * ((W-padL-padR)/Math.max(ticks.length-1,1))}" y="${H-6}" text-anchor="middle" class="tick">${t}</text>`).join('')}
+      <line class="chart-guide" x1="0" y1="${padT}" x2="0" y2="${H-padB}" style="display:none"/>
+      <circle class="chart-dot" cx="0" cy="0" r="4" style="display:none"/>
+    </svg>
+    <div class="chart-tip" style="display:none"></div>
+  </div>`;
 }
+
+/* Single delegated handler — one chart or many on a page, all get hover. */
+function setupChartHover() {
+  if (document.body.dataset.chartHoverWired === '1') return;
+  document.body.dataset.chartHoverWired = '1';
+
+  const onMove = (e) => {
+    const wrap = e.target.closest('.chart-wrap');
+    if (!wrap) return;
+    let meta;
+    try { meta = JSON.parse(wrap.dataset.chart); } catch { return; }
+    const { pts, W, H, padL, padR, valueLabel } = meta;
+    if (!pts || !pts.length) return;
+    const rect = wrap.getBoundingClientRect();
+    if (!rect.width) return;
+    // Translate client coords to the SVG's viewBox coordinate system.
+    const svgX = ((e.clientX - rect.left) / rect.width) * W;
+    const stepX = (W - padL - padR) / Math.max(pts.length - 1, 1);
+    let idx = Math.round((svgX - padL) / stepX);
+    idx = Math.max(0, Math.min(pts.length - 1, idx));
+    const p = pts[idx];
+
+    const guide = wrap.querySelector('.chart-guide');
+    const dot   = wrap.querySelector('.chart-dot');
+    const tip   = wrap.querySelector('.chart-tip');
+    if (guide) {
+      guide.setAttribute('x1', p.x);
+      guide.setAttribute('x2', p.x);
+      guide.style.display = '';
+    }
+    if (dot) {
+      dot.setAttribute('cx', p.x);
+      dot.setAttribute('cy', p.y);
+      dot.style.display = '';
+    }
+    if (tip) {
+      const noun = p.v === 1 ? valueLabel.replace(/s$/, '') : valueLabel;
+      tip.innerHTML = `<div class="chart-tip-when">${escapeHtml(p.l || '—')}</div>
+                       <div class="chart-tip-val">${p.v} ${escapeHtml(noun)}</div>`;
+      // Place tooltip in CSS pixel space — the SVG x maps proportionally back.
+      const cssX = (p.x / W) * rect.width;
+      const cssY = (p.y / H) * rect.height;
+      tip.style.display = '';
+      // Read tooltip width *after* it is visible to keep it on-screen.
+      const tw = tip.offsetWidth;
+      const th = tip.offsetHeight;
+      let left = cssX - tw / 2;
+      left = Math.max(4, Math.min(rect.width - tw - 4, left));
+      let top  = cssY - th - 10;
+      if (top < 4) top = cssY + 14;
+      tip.style.left = `${left}px`;
+      tip.style.top  = `${top}px`;
+    }
+  };
+  const onLeave = (e) => {
+    const wrap = e.target.closest('.chart-wrap');
+    if (!wrap) return;
+    wrap.querySelector('.chart-guide')?.style.setProperty('display', 'none');
+    wrap.querySelector('.chart-dot')?.style.setProperty('display', 'none');
+    const tip = wrap.querySelector('.chart-tip');
+    if (tip) tip.style.display = 'none';
+  };
+  document.addEventListener('mousemove', onMove);
+  document.addEventListener('mouseleave', onLeave, true);
+}
+setupChartHover();
 
 function donutChart(slices, size = 130, thickness = 16) {
   const total = slices.reduce((a, b) => a + b.value, 0);
@@ -390,7 +481,13 @@ function lastNDays(n, isoList) {
     ticks.push(new Date(todayMs - (n-1-i)*day)
       .toLocaleDateString('en-GB', { day:'2-digit', month:'short' }));
   }
-  return { values: buckets, ticks };
+  // Per-bucket labels for the hover tooltip — one full date per value.
+  const dayLabels = [];
+  for (let i = 0; i < n; i++) {
+    dayLabels.push(new Date(todayMs - (n-1-i)*day)
+      .toLocaleDateString('en-GB', { weekday:'short', day:'2-digit', month:'short' }));
+  }
+  return { values: buckets, ticks, dayLabels };
 }
 
 /* ════════════════════════════════════════════════════════════════
@@ -468,6 +565,29 @@ const ROLE_CONFIG = {
 let currentRole = null;
 let currentUser = null;
 let currentPage = null;
+
+/* Populate a <select> with the clinical staff (Doctor + Nurse), including the
+   signed-in user — the API hides self by design, so we re-inject it here.
+   The chosen value is the staff member's full_name, matching the existing
+   `assigned_to` shape on queue_entries. */
+async function populateStaffSelect(selectEl, selectedName = '') {
+  if (!selectEl) return;
+  const placeholder = '<option value="">— Unassigned —</option>';
+  try {
+    const { data } = await api('GET', '/auth/staff');
+    const clinical = (data || []).filter(u => ['Doctor', 'Nurse'].includes(u.role));
+    if (['Doctor', 'Nurse'].includes(currentRole) && currentUser) {
+      clinical.unshift({ username: currentUser, full_name: currentUser, role: currentRole, is_self: true });
+    }
+    selectEl.innerHTML = placeholder + clinical.map(u => {
+      const label = `${u.full_name}${u.is_self ? ' (me)' : ''} — ${u.role}`;
+      const sel = u.full_name === selectedName ? ' selected' : '';
+      return `<option value="${escapeHtml(u.full_name)}"${sel}>${escapeHtml(label)}</option>`;
+    }).join('');
+  } catch {
+    selectEl.innerHTML = '<option value="">— Unable to load staff —</option>';
+  }
+}
 
 /* ════════════════════════════════════════════════════════════════
    CLOCK
@@ -828,6 +948,19 @@ async function collectNotifications() {
       icon: m.kind === 'request' ? 'zap' : 'mail',
       tone: m.kind === 'request' ? 'orange' : 'blue',
       page: 'team',
+      // Full message payload so the centered popup can render it in detail.
+      message: {
+        id: m.id,
+        from_name: m.from_name,
+        from_role: m.from_role,
+        kind: m.kind,
+        body: m.body,
+        created_at: m.created_at,
+        attachment_path: m.attachment_path,
+        attachment_name: m.attachment_name,
+        attachment_mime: m.attachment_mime,
+        attachment_size: m.attachment_size,
+      },
     }));
   }).catch(() => {}));
 
@@ -866,8 +999,12 @@ function renderNotifPanel(items) {
   items.forEach(it => { (grouped[it.section] ||= []).push(it); });
   list.innerHTML = Object.entries(grouped).map(([section, group]) => `
     <div class="notif-section-head">${escapeHtml(section)} · ${group.length}</div>
-    ${group.map((it, i) => `
-      <div class="notif-item" data-page="${it.page}" onclick="onNotifClick(this)">
+    ${group.map((it) => {
+      // Use the item's true index in the flat items[] array so the click
+      // handler can look the record back up — robust to any section order.
+      const i = items.indexOf(it);
+      return `
+      <div class="notif-item js-notif-item" data-idx="${i}">
         <div class="ico-wrap" style="background:#${({red:'fff5f5',orange:'fff4e6',blue:'e7f5ff',teal:'ecfdf9',violet:'f3f0ff'})[it.tone] || 'f1f3f5'}">
           ${icon(it.icon, 16, it.tone)}
         </div>
@@ -875,15 +1012,100 @@ function renderNotifPanel(items) {
           <div class="ttl">${escapeHtml(it.ttl)}</div>
           <div class="mt">${escapeHtml(it.mt)}</div>
         </div>
-      </div>`).join('')}
+      </div>`;
+    }).join('')}
   `).join('');
+
+  // CSP blocks inline onclick="..." (script-src-attr is 'none' in helmet's
+  // defaults). Bind every row via addEventListener after the innerHTML
+  // assignment.
+  list.querySelectorAll('.js-notif-item').forEach(el => {
+    el.onclick = (e) => { e.stopPropagation(); onNotifClick(el); };
+  });
 }
 
+const NOTIF_PAGE_LABELS = {
+  'dashboard':      'Dashboard',
+  'triage-queue':   'Triage Queue',
+  'low-stock':      'Low Stock',
+  'team':           'Team',
+  'staff-accounts': 'Staff Accounts',
+};
+
 window.onNotifClick = (el) => {
-  const page = el.dataset.page;
-  $('notif-panel').style.display = 'none';
-  if (page && page !== currentPage) navigate(page);
-  else if (page === currentPage && page === 'dashboard') navigate('dashboard'); // refresh
+  const idx = Number(el.dataset.idx);
+  const it  = _notifItems[idx];
+  const panel = $('notif-panel');
+  if (panel) panel.style.display = 'none';
+  if (!it) return;
+
+  const toneBg = ({red:'#fff5f5',orange:'#fff4e6',blue:'#e7f5ff',teal:'#ecfdf9',violet:'#f3f0ff',green:'#ecfdf3'})[it.tone] || '#f1f3f5';
+  const pageLabel = NOTIF_PAGE_LABELS[it.page] || 'page';
+
+  let bodyHtml;
+  if (it.message) {
+    // Messages and requests: show sender, role, timestamp, full body, and a
+    // Mark as read action so the user does not need to leave for the Team page.
+    const m = it.message;
+    bodyHtml = `
+      <div style="display:flex;gap:14px;align-items:flex-start;margin-bottom:14px">
+        <div class="ico-wrap" style="background:${toneBg};width:44px;height:44px;border-radius:10px;display:flex;align-items:center;justify-content:center;flex:none">
+          ${icon(it.icon, 22, it.tone)}
+        </div>
+        <div style="flex:1;min-width:0">
+          <div style="font-weight:600;font-size:15px;color:var(--text);margin-bottom:2px">${escapeHtml(m.from_name)}</div>
+          <div style="font-size:12px;color:var(--text-mut)">${escapeHtml(m.from_role || 'Staff')} · ${escapeHtml(fmt(m.created_at))}</div>
+        </div>
+      </div>
+      <div style="background:var(--surface-2);border-radius:8px;padding:14px 16px;font-size:14px;line-height:1.55;color:var(--text);white-space:pre-wrap;word-break:break-word;margin-bottom:${m.attachment_path ? '10' : '18'}px">${escapeHtml(m.body) || '<em class="dim">(no body)</em>'}</div>
+      ${m.attachment_path ? `<div style="margin-bottom:18px">${attachmentChip(m)}</div>` : ''}
+      <div class="form-actions" style="display:flex;justify-content:flex-end;gap:8px">
+        <button class="btn btn-ghost" id="notif-modal-close">Close</button>
+        <button class="btn btn-secondary" id="notif-modal-read">Mark as read</button>
+        <button class="btn btn-primary"   id="notif-modal-go">Open Team</button>
+      </div>`;
+  } else {
+    bodyHtml = `
+      <div style="display:flex;gap:14px;align-items:flex-start;margin-bottom:18px">
+        <div class="ico-wrap" style="background:${toneBg};width:44px;height:44px;border-radius:10px;display:flex;align-items:center;justify-content:center;flex:none">
+          ${icon(it.icon, 22, it.tone)}
+        </div>
+        <div style="flex:1;min-width:0">
+          <div style="font-weight:600;font-size:15px;color:var(--text);margin-bottom:6px;word-break:break-word">${escapeHtml(it.ttl)}</div>
+          <div style="font-size:13px;color:var(--text-mut);line-height:1.5;word-break:break-word">${escapeHtml(it.mt) || '<em>No additional details</em>'}</div>
+        </div>
+      </div>
+      <div class="form-actions" style="display:flex;justify-content:flex-end;gap:8px">
+        <button class="btn btn-ghost" id="notif-modal-close">Close</button>
+        ${it.page ? `<button class="btn btn-primary" id="notif-modal-go">Open ${escapeHtml(pageLabel)}</button>` : ''}
+      </div>`;
+  }
+
+  openModal(it.section, bodyHtml);
+  $('notif-modal-close').onclick = closeModal;
+
+  const goBtn = $('notif-modal-go');
+  if (goBtn) goBtn.onclick = () => {
+    closeModal();
+    if (it.page === currentPage && it.page === 'dashboard') navigate('dashboard');
+    else if (it.page) navigate(it.page);
+  };
+
+  const readBtn = $('notif-modal-read');
+  if (readBtn) readBtn.onclick = async () => {
+    readBtn.disabled = true;
+    readBtn.textContent = 'Marking…';
+    try {
+      await api('PATCH', `/messages/${it.message.id}/read`);
+      toast('Marked as read', 'success');
+      closeModal();
+      refreshNotifications();
+    } catch (err) {
+      toast(err.message, 'error');
+      readBtn.disabled = false;
+      readBtn.textContent = 'Mark as read';
+    }
+  };
 };
 
 /* ════════════════════════════════════════════════════════════════
@@ -1030,7 +1252,11 @@ async function renderAdminDashboard(el) {
   // ── Registration trend chart ──
   if (pAll.status === 'fulfilled') {
     const series = lastNDays(14, (pAll.value.data || []).map(p => p.registered_at));
-    setHTML('ad-chart', areaChart(series.values, { xTicks: series.ticks }));
+    setHTML('ad-chart', areaChart(series.values, {
+      xTicks: series.ticks,
+      dayLabels: series.dayLabels,
+      valueLabel: 'registrations',
+    }));
   }
 
   // ── Triage rank list + mini bars + donut ──
@@ -1566,6 +1792,10 @@ window.editPatient = async (id) => {
           <label>Contact Number</label>
           <input id="e-contact" value="${escapeHtml(p.contact_number||'')}">
         </div>
+        <div class="form-group">
+          <label>Emergency Contact</label>
+          <input id="e-emergency" value="${escapeHtml(p.emergency_contact||'')}">
+        </div>
         <div class="form-group full">
           <label>Address</label>
           <input id="e-address" value="${escapeHtml(p.address||'')}">
@@ -1583,13 +1813,14 @@ window.editPatient = async (id) => {
     $('e-cancel').onclick = closeModal;
     $('e-save').onclick = async () => {
       const payload = {
-        full_name:      $('e-name').value.trim(),
-        date_of_birth:  $('e-dob').value,
-        sex:            $('e-sex').value,
-        blood_group:    $('e-blood').value,
-        contact_number: $('e-contact').value,
-        address:        $('e-address').value,
-        allergy_notes:  $('e-allergy').value,
+        full_name:         $('e-name').value.trim(),
+        date_of_birth:     $('e-dob').value,
+        sex:               $('e-sex').value,
+        blood_group:       $('e-blood').value,
+        contact_number:    $('e-contact').value,
+        emergency_contact: $('e-emergency').value,
+        address:           $('e-address').value,
+        allergy_notes:     $('e-allergy').value,
       };
       if (!payload.full_name || !payload.date_of_birth) {
         toast('Name and DOB are required', 'warning'); return;
@@ -1757,6 +1988,10 @@ PAGES['patient-register'] = (el) => {
               <label>Contact Number</label>
               <input id="r-contact" placeholder="Phone number">
             </div>
+            <div class="form-group">
+              <label>Emergency Contact</label>
+              <input id="r-emergency" placeholder="Name & phone, e.g. Jane Doe — 555-0143">
+            </div>
             <div class="form-group full">
               <label>Address</label>
               <input id="r-address" placeholder="Full address">
@@ -1769,7 +2004,7 @@ PAGES['patient-register'] = (el) => {
           <div class="form-actions">
             <button class="btn btn-ghost" id="r-cancel">Clear</button>
             <button class="btn btn-secondary" id="r-save-only">Save</button>
-            <button class="btn btn-primary-accent" id="r-save-next">Save &amp; Add Another</button>
+            <button class="btn btn-primary-accent" id="r-save-next">Save &amp; Triage Now</button>
           </div>
         </div>
       </div>
@@ -1780,24 +2015,25 @@ PAGES['patient-register'] = (el) => {
     </div>`;
 
   const fields = () => ({
-    patient_ref:    $('r-ref').value.trim(),
-    full_name:      $('r-name').value.trim(),
-    date_of_birth:  $('r-dob').value,
-    sex:            $('r-sex').value,
-    blood_group:    $('r-blood').value,
-    contact_number: $('r-contact').value,
-    address:        $('r-address').value,
-    allergy_notes:  $('r-allergy').value,
+    patient_ref:       $('r-ref').value.trim(),
+    full_name:         $('r-name').value.trim(),
+    date_of_birth:     $('r-dob').value,
+    sex:               $('r-sex').value,
+    blood_group:       $('r-blood').value,
+    contact_number:    $('r-contact').value,
+    emergency_contact: $('r-emergency').value,
+    address:           $('r-address').value,
+    allergy_notes:     $('r-allergy').value,
   });
 
   const clearForm = (newRef = true) => {
-    ['r-name','r-dob','r-contact','r-address','r-allergy'].forEach(id => $(id).value = '');
+    ['r-name','r-dob','r-contact','r-emergency','r-address','r-allergy'].forEach(id => $(id).value = '');
     $('r-sex').value = ''; $('r-blood').value = '';
     if (newRef) $('r-ref').value = `PAT-${new Date().getFullYear()}-${Math.floor(Math.random()*9000+1000)}`;
     $('r-name').focus();
   };
 
-  const save = async (andAnother) => {
+  const save = async (triageAfter) => {
     const f = fields();
     if (!f.patient_ref || !f.full_name || !f.date_of_birth) {
       toast('Reference, Name and DOB are required', 'warning'); return;
@@ -1806,8 +2042,12 @@ PAGES['patient-register'] = (el) => {
       await api('POST', '/patients', f);
       toast(`Saved: ${f.full_name}`, 'success');
       await loadRecent();
-      if (andAnother) clearForm(true);
-      else navigate('patient-search');
+      if (triageAfter) {
+        // Pop the WHO triage form pre-loaded with the patient just registered.
+        showEnqueueModal(() => navigate('triage-queue'), { prefillRef: f.patient_ref });
+      } else {
+        navigate('patient-search');
+      }
     } catch(e) { toast(e.message, 'error'); }
   };
 
@@ -1889,9 +2129,21 @@ PAGES['stock-ledger'] = async (el) => {
           <td class="text-mut">${i.reorder_threshold}</td>
           <td class="text-mut">${escapeHtml(i.location||'—')}</td>
           <td class="text-mut">${i.expiry_date ? fmtDateOnly(i.expiry_date) : '—'}</td>
-          <td><button class="btn btn-xs btn-ghost" data-iid="${i.id}" data-iname="${escapeHtml(i.item_name)}" onclick="openTxnModal(this.dataset.iid, this.dataset.iname, reloadInventory)">Transact</button></td>
+          <td style="white-space:nowrap">
+            <button class="btn btn-xs btn-primary-accent js-add-stock" data-iid="${i.id}" data-iname="${escapeHtml(i.item_name)}">${icon('plus',12)}<span>Add</span></button>
+            <button class="btn btn-xs btn-ghost js-txn"               data-iid="${i.id}" data-iname="${escapeHtml(i.item_name)}" style="margin-left:4px">Transact</button>
+          </td>
         </tr>`;
       }).join('')}</tbody></table></div>`;
+
+    // Wire the per-row action buttons through addEventListener — inline
+    // onclick="" is blocked by the CSP's script-src-attr 'none' directive.
+    $('inv-table').querySelectorAll('.js-add-stock').forEach(btn => {
+      btn.onclick = () => openAddStockModal(btn.dataset.iid, btn.dataset.iname, reloadInventory);
+    });
+    $('inv-table').querySelectorAll('.js-txn').forEach(btn => {
+      btn.onclick = () => openTxnModal(btn.dataset.iid, btn.dataset.iname, reloadInventory);
+    });
   };
 
   window.reloadInventory = async () => {
@@ -1960,6 +2212,45 @@ function openAddItemModal(onSaved) {
     } catch(e) { toast(e.message, 'error'); }
   };
 }
+
+// Quick-path: just add to on-hand. Records a 'restock' transaction.
+window.openAddStockModal = (id, name, onSaved) => {
+  openModal(`Add Stock — ${name}`, `
+    <div class="form-grid">
+      <div class="form-group"><label>Quantity to Add <span class="req">*</span></label>
+        <input id="as-qty" type="number" min="1" value="1" autofocus>
+      </div>
+      <div class="form-group"><label>Performed by</label>
+        <input id="as-by" value="${escapeHtml(currentUser||'')}">
+      </div>
+      <div class="form-group full"><label>Notes <span class="dim">(optional — supplier, batch, PO)</span></label>
+        <input id="as-notes" placeholder="e.g. PO-2026-014 · MedSupply Ltd · batch 7B">
+      </div>
+    </div>
+    <div class="form-actions">
+      <button class="btn btn-ghost" id="as-cancel">Cancel</button>
+      <button class="btn btn-primary-accent" id="as-save">${icon('plus',12)}<span>Add to Stock</span></button>
+    </div>`);
+  $('as-cancel').onclick = closeModal;
+  $('as-save').onclick = async () => {
+    const qty = +$('as-qty').value;
+    if (!qty || qty <= 0) { toast('Enter a positive quantity', 'warning'); return; }
+    const btn = $('as-save');
+    btn.disabled = true; btn.innerHTML = 'Adding…';
+    try {
+      await api('POST', `/inventory/${id}/transactions`, {
+        txn_type: 'restock', quantity_delta: qty,
+        performed_by: $('as-by').value, notes: $('as-notes').value,
+      });
+      toast(`Added ${qty} to ${name}`, 'success');
+      closeModal();
+      if (onSaved) onSaved();
+    } catch(e) {
+      toast(e.message, 'error');
+      btn.disabled = false; btn.innerHTML = `${icon('plus',12)}<span>Add to Stock</span>`;
+    }
+  };
+};
 
 window.openTxnModal = (id, name, onSaved) => {
   openModal(`Record Transaction — ${name}`, `
@@ -2148,7 +2439,7 @@ const TRIAGE_COLOR_HEX = {
   black:  { bg: '#1f2937', border: '#000',    text: '#fff'    },
 };
 
-window.showEnqueueModal = (onSuccess) => {
+window.showEnqueueModal = (onSuccess, opts = {}) => {
   const meds = [
     { key: 'diabetes',     label: 'Diabetes' },
     { key: 'hypertension', label: 'Hypertension' },
@@ -2156,16 +2447,21 @@ window.showEnqueueModal = (onSuccess) => {
     { key: 'asthma',       label: 'Asthma' },
   ];
   openModal('Patient Triage Form (WHO)', `
-    <details open style="margin-bottom:8px"><summary style="cursor:pointer;font-weight:700;padding:8px 0">${icon('user',14,'blue')} 1. Patient</summary>
+    <details open style="margin-bottom:8px"><summary style="cursor:pointer;font-weight:700;padding:8px 0">${icon('user',14,'blue')} 1. Patient Information</summary>
       <div class="form-grid" style="margin-top:8px">
         <div class="form-group full"><label>Patient Reference <span class="req">*</span></label>
-          <input id="eq-ref" placeholder="e.g. PAT-2024-001">
+          <input id="eq-ref" placeholder="e.g. PAT-2024-001" value="${escapeHtml(opts.prefillRef || '')}">
         </div>
-        <div class="form-group"><label>Assign to</label>
-          <input id="eq-assign" placeholder="Doctor / Nurse name" value="${currentRole==='Doctor' ? escapeHtml(currentUser||'') : ''}">
+        <div class="form-group full">
+          <div id="eq-found" class="dim" style="font-size:12px">Enter a reference and tab away to look up</div>
         </div>
-        <div class="form-group"><label>&nbsp;</label>
-          <div id="eq-found" class="dim" style="font-size:12px;padding-top:8px">Enter a reference and tab away to look up</div>
+        <div class="form-group"><label>Full Name</label><input id="eq-pname"     disabled placeholder="—"></div>
+        <div class="form-group"><label>Age</label>      <input id="eq-page"      disabled placeholder="—"></div>
+        <div class="form-group"><label>Gender</label>   <input id="eq-psex"      disabled placeholder="—"></div>
+        <div class="form-group"><label>Phone</label>    <input id="eq-pphone"    disabled placeholder="—"></div>
+        <div class="form-group full"><label>Emergency Contact</label><input id="eq-pec" disabled placeholder="—"></div>
+        <div class="form-group full"><label>Assign to (Assessed By)</label>
+          <select id="eq-assign"><option value="">Loading staff…</option></select>
         </div>
       </div>
     </details>
@@ -2209,8 +2505,14 @@ window.showEnqueueModal = (onSuccess) => {
 
     <details><summary style="cursor:pointer;font-weight:700;padding:8px 0">${icon('pill',14,'violet')} 5. Allergies & Medications</summary>
       <div class="form-grid" style="margin-top:8px">
-        <div class="form-group full"><label>Drug Allergies</label>
+        <div class="form-group"><label>Drug Allergies</label>
           <input id="eq-drug" placeholder="e.g. Penicillin, sulfa">
+        </div>
+        <div class="form-group"><label>Food Allergies</label>
+          <input id="eq-food" placeholder="e.g. Peanuts, shellfish">
+        </div>
+        <div class="form-group full"><label>Other Allergies</label>
+          <input id="eq-otherallergy" placeholder="Latex, pollen, insect stings, …">
         </div>
         <div class="form-group full"><label>Current Medications</label>
           <textarea id="eq-meds" rows="2" placeholder="Active prescriptions, OTC, herbal"></textarea>
@@ -2234,6 +2536,19 @@ window.showEnqueueModal = (onSuccess) => {
       <div style="font-size:12px;color:var(--text-mut);margin-top:2px" id="eq-banner-reason">Answer the assessment to compute</div>
     </div>
 
+    <!-- Assigned Priority — explicit override of the WHO computation -->
+    <div style="margin-top:14px;padding:12px 14px;border:1px solid var(--border-2);border-radius:8px;background:var(--surface)">
+      <div style="font-size:11px;font-weight:700;color:var(--text-mut);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">Assigned Priority</div>
+      <div style="display:flex;flex-wrap:wrap;gap:14px;font-size:13px">
+        <label style="display:flex;align-items:center;gap:6px;cursor:pointer"><input type="radio" name="eq-pri" value="auto" checked> Use computed</label>
+        <label style="display:flex;align-items:center;gap:6px;cursor:pointer;color:#991b1b"><input type="radio" name="eq-pri" value="red">    <strong>RED</strong> Immediate</label>
+        <label style="display:flex;align-items:center;gap:6px;cursor:pointer;color:#92400e"><input type="radio" name="eq-pri" value="yellow"> <strong>YELLOW</strong> Urgent</label>
+        <label style="display:flex;align-items:center;gap:6px;cursor:pointer;color:#065f46"><input type="radio" name="eq-pri" value="green">  <strong>GREEN</strong> Stable</label>
+        ${isDisasterMode() ? `
+        <label style="display:flex;align-items:center;gap:6px;cursor:pointer;color:#1f2937"><input type="radio" name="eq-pri" value="black"> <strong>BLACK</strong> Deceased</label>` : ''}
+      </div>
+    </div>
+
     <!-- Only available in Disaster Mode (admin toggles in Security dashboard) -->
     ${isDisasterMode() ? `
     <label style="display:flex;align-items:center;gap:8px;margin-top:12px;padding:10px 14px;background:#fef2f2;border:1px solid #fecaca;border-radius:8px;cursor:pointer">
@@ -2248,22 +2563,55 @@ window.showEnqueueModal = (onSuccess) => {
 
   document.querySelector('.modal')?.classList.add('wide');
 
-  // ── Patient lookup ──
+  // ── Patient lookup — populate Full Name / Age / Gender / Phone / Emergency Contact ──
+  const SEX_LABEL = { M: 'Male', F: 'Female', O: 'Other' };
+  const ageFromDOB = (iso) => {
+    if (!iso) return '';
+    const d = new Date(iso); if (isNaN(d)) return '';
+    const n = new Date();
+    let a = n.getFullYear() - d.getFullYear();
+    const m = n.getMonth() - d.getMonth();
+    if (m < 0 || (m === 0 && n.getDate() < d.getDate())) a--;
+    return a >= 0 ? `${a}` : '';
+  };
+  const clearPatientDetails = () => {
+    ['eq-pname','eq-page','eq-psex','eq-pphone','eq-pec'].forEach(id => { const el = $(id); if (el) el.value = ''; });
+  };
+  const paintPatientDetails = async (p) => {
+    // Lookup returns the public columns; fetch the full record for emergency_contact
+    let full = p;
+    try { full = await api('GET', `/patients/${p.id}`); } catch { /* fall back to the partial row */ }
+    $('eq-pname').value  = full.full_name || '';
+    $('eq-page').value   = ageFromDOB(full.date_of_birth);
+    $('eq-psex').value   = SEX_LABEL[full.sex] || full.sex || '';
+    $('eq-pphone').value = full.contact_number || '';
+    $('eq-pec').value    = full.emergency_contact || '';
+  };
+
   let foundPatient = null;
   const lookup = debounce(async () => {
     const ref = $('eq-ref').value.trim();
-    if (!ref) { foundPatient = null; setHTML('eq-found', '<span class="dim" style="font-size:12px">Enter a reference and tab away to look up</span>'); return; }
+    if (!ref) { foundPatient = null; clearPatientDetails(); setHTML('eq-found', '<span class="dim" style="font-size:12px">Enter a reference and tab away to look up</span>'); return; }
     try {
       const { data } = await api('GET', `/patients?q=${encodeURIComponent(ref)}&limit=1`);
-      if (!data.length) { foundPatient = null; setHTML('eq-found', '<span class="alert alert-error" style="margin:0;padding:6px 10px;font-size:12px">Not found</span>'); return; }
+      if (!data.length) { foundPatient = null; clearPatientDetails(); setHTML('eq-found', '<span class="alert alert-error" style="margin:0;padding:6px 10px;font-size:12px">Not found</span>'); return; }
       foundPatient = data[0];
       setHTML('eq-found', `<span style="font-size:12px;color:var(--success)">✓ ${escapeHtml(data[0].full_name)} (DOB ${escapeHtml(data[0].date_of_birth)})</span>`);
+      paintPatientDetails(data[0]);
     } catch (e) { setHTML('eq-found', `<span class="alert alert-error" style="margin:0;padding:6px 10px;font-size:12px">${escapeHtml(e.message)}</span>`); }
   }, 250);
   $('eq-ref').oninput = lookup;
+  // If a prefill ref was provided (post-registration), look up immediately.
+  if (opts.prefillRef) lookup();
+
+  // Populate the Assign-to dropdown with every approved Doctor and Nurse
+  // (plus the signed-in user, who the API hides). Self is pre-selected when
+  // the assessor is a clinical role.
+  const preselect = (currentRole === 'Doctor' || currentRole === 'Nurse') ? currentUser : '';
+  populateStaffSelect($('eq-assign'), preselect);
 
   // ── Live triage colour banner ──
-  const refreshBanner = () => {
+  const computeColorFromForm = () => {
     const flags = {};
     for (const q of WHO_EMERGENCY) {
       const checked = document.querySelector(`input[name="eq-q-${q.key}"]:checked`);
@@ -2274,19 +2622,21 @@ window.showEnqueueModal = (onSuccess) => {
       vitals_hr_bpm:   $('eq-hr').value,
       vitals_spo2_pct: $('eq-spo2').value,
     };
-    let color, reason;
-    if ($('eq-deceased')?.checked) {
-      color  = 'black';
-      reason = 'Marked DECEASED (disaster mode)';
-    } else {
-      const r = computeColorClient(flags, vitals);
-      color  = r.color;
-      reason = r.reason;
-    }
+    if ($('eq-deceased')?.checked) return { color: 'black', reason: 'Marked DECEASED (disaster mode)' };
+    return computeColorClient(flags, vitals);
+  };
+  const refreshBanner = () => {
+    const auto = computeColorFromForm();
+    const override = document.querySelector('input[name="eq-pri"]:checked')?.value || 'auto';
+    const color  = override === 'auto' ? auto.color : override;
+    const reason = override === 'auto'
+      ? auto.reason
+      : `Manually assigned (auto would be ${auto.color.toUpperCase()})`;
+
     const c = TRIAGE_COLOR_HEX[color];
     const banner = $('eq-banner');
-    banner.style.background    = c.bg;
-    banner.style.borderColor   = c.border;
+    banner.style.background      = c.bg;
+    banner.style.borderColor     = c.border;
     banner.style.borderLeftColor = c.border;
     const label = color === 'black' ? 'Immediate' : (TRIAGE_COLOR_META[color]?.label || 'Stable');
     $('eq-banner-label').textContent  = `${color.toUpperCase()} — ${color === 'black' ? 'DECEASED' : label}`;
@@ -2298,6 +2648,7 @@ window.showEnqueueModal = (onSuccess) => {
   WHO_EMERGENCY.forEach(q => {
     document.querySelectorAll(`input[name="eq-q-${q.key}"]`).forEach(r => r.onchange = refreshBanner);
   });
+  document.querySelectorAll('input[name="eq-pri"]').forEach(r => r.onchange = refreshBanner);
   $('eq-deceased') && ($('eq-deceased').onchange = refreshBanner);
 
   // ── Submit ──
@@ -2326,6 +2677,14 @@ window.showEnqueueModal = (onSuccess) => {
     const btn = $('eq-save');
     btn.disabled = true;
     btn.innerHTML = 'Adding…';
+
+    // Final colour: deceased checkbox > manual radio > auto compute (server still recomputes)
+    const override = document.querySelector('input[name="eq-pri"]:checked')?.value || 'auto';
+    let chosenColor;
+    if ($('eq-deceased')?.checked) chosenColor = 'black';
+    else if (override !== 'auto')  chosenColor = override;
+    const COLOR_TO_LEVEL = { red: 1, yellow: 3, green: 4, black: 5 };
+
     try {
       await api('POST', '/queue', {
         patient_id:       foundPatient.id,
@@ -2339,11 +2698,13 @@ window.showEnqueueModal = (onSuccess) => {
         emergency_flags,
         symptoms:         $('eq-symptoms').value || null,
         duration:         $('eq-duration').value || null,
-        drug_allergies:   $('eq-drug').value     || null,
-        current_meds:     $('eq-meds').value     || null,
+        drug_allergies:   $('eq-drug').value           || null,
+        food_allergies:   $('eq-food').value           || null,
+        other_allergies:  $('eq-otherallergy').value   || null,
+        current_meds:     $('eq-meds').value           || null,
         medical_history:  history.concat([$('eq-hist').value].filter(Boolean)).join(','),
-        triage_color:     $('eq-deceased')?.checked ? 'black' : undefined,
-        triage_level:     $('eq-deceased')?.checked ? 5 : undefined,
+        triage_color:     chosenColor,
+        triage_level:     chosenColor ? COLOR_TO_LEVEL[chosenColor] : undefined,
       });
       toast('Patient triaged and added', 'success');
       closeModal();
@@ -2363,7 +2724,7 @@ window.showEnqueueModal = (onSuccess) => {
 PAGES['staff-roster'] = async (el) => {
   el.innerHTML = `
     <div class="page-header">
-      <div><h1>Staff Duty Roster</h1><p>Currently on-duty clinical staff</p></div>
+      <div><h1>Staff Duty Roster</h1><p>On-duty and off-duty clinical staff</p></div>
       <div class="page-actions">
         <button class="btn btn-secondary btn-sm" id="sr-refresh-btn">${icon('refresh',14)}<span>Refresh</span></button>
         <button class="btn btn-primary-accent" id="add-shift">${icon('plus',14)}<span>Add Shift</span></button>
@@ -2375,29 +2736,50 @@ PAGES['staff-roster'] = async (el) => {
   loadRosterPage();
 };
 
+function rosterTable(rows) {
+  return `<div class="table-wrap"><table>
+    <thead><tr><th>Name</th><th>Role</th><th>Ward</th><th>Shift Start</th><th>Shift End</th></tr></thead>
+    <tbody>${rows.map(s => `<tr>
+      <td><strong>${escapeHtml(s.staff_name)}</strong></td>
+      <td>${badge(s.role,'teal')}</td>
+      <td class="text-mut">${escapeHtml(s.ward||'—')}</td>
+      <td>${fmt(s.shift_start)}</td>
+      <td>${fmt(s.shift_end)}</td>
+    </tr>`).join('')}</tbody></table></div>`;
+}
+
 async function loadRosterPage() {
   const el = $('roster');
   if (!el) return;
   try {
-    const { data } = await api('GET', '/queue/roster');
+    const { data } = await api('GET', '/queue/roster?all=1');
     if (!data.length) {
       el.innerHTML = `<div class="card"><div class="empty">
-        <div class="icon">${icon('users', 36, 'violet')}</div><p>No staff currently on duty</p>
+        <div class="icon">${icon('users', 36, 'violet')}</div><p>No staff in the roster yet</p>
         <button class="btn btn-primary-accent btn-sm" id="sr-empty-add-btn">${icon('plus',12)}<span>Add First Shift</span></button>
       </div></div>`;
       const emptyBtn = $('sr-empty-add-btn');
       if (emptyBtn) emptyBtn.onclick = () => showAddShiftModal(loadRosterPage);
       return;
     }
-    el.innerHTML = `<div class="card"><div class="table-wrap"><table>
-      <thead><tr><th>Name</th><th>Role</th><th>Ward</th><th>Shift Start</th><th>Shift End</th></tr></thead>
-      <tbody>${data.map(s => `<tr>
-        <td><strong>${escapeHtml(s.staff_name)}</strong></td>
-        <td>${badge(s.role,'teal')}</td>
-        <td class="text-mut">${escapeHtml(s.ward||'—')}</td>
-        <td>${fmt(s.shift_start)}</td>
-        <td>${fmt(s.shift_end)}</td>
-      </tr>`).join('')}</tbody></table></div></div>`;
+    const onDuty  = data.filter(s => s.is_active);
+    const offDuty = data.filter(s => !s.is_active);
+
+    const section = (title, tone, rows, emptyMsg) => `
+      <div class="card" style="margin-bottom:18px">
+        <div class="card-head">
+          <h2>${icon(tone === 'green' ? 'checkCircle' : 'clock', 16, tone)}${escapeHtml(title)}</h2>
+          <span class="meta">${rows.length} ${rows.length === 1 ? 'person' : 'people'}</span>
+        </div>
+        <div class="card-body" style="padding:0">
+          ${rows.length ? rosterTable(rows)
+            : `<div class="empty" style="padding:24px"><p>${escapeHtml(emptyMsg)}</p></div>`}
+        </div>
+      </div>`;
+
+    el.innerHTML =
+        section('On Duty',  'green', onDuty,  'No staff currently on duty')
+      + section('Off Duty', 'gray',  offDuty, 'No off-duty staff on file');
   } catch(e) { el.innerHTML = `<div class="alert alert-error">${escapeHtml(e.message)}</div>`; }
 }
 
@@ -2455,7 +2837,7 @@ PAGES['staff-accounts'] = async (el) => {
     <div class="card">
       <div class="filter-row">
         <div class="filter-input"><input id="sa-q" placeholder="Filter by name or username…" autofocus></div>
-        <select id="sa-status" style="height:36px;padding:0 12px;border:1px solid var(--border-2);border-radius:var(--r-sm);outline:none;background:var(--surface);font-size:13px">
+        <select id="sa-status">
           <option value="">All Statuses</option>
           <option value="approved">Approved</option>
           <option value="pending">Pending</option>
@@ -2731,6 +3113,7 @@ PAGES['team'] = async (el) => {
         <div class="who" style="flex:1;min-width:0">
           <div class="nm">${unreadDot}${escapeHtml(m.from_name)} ${kindBadge}</div>
           <div class="mt" style="margin-top:4px;color:var(--text);font-size:13px;line-height:1.4;white-space:normal">${escapeHtml(m.body)}</div>
+          ${attachmentChip(m)}
           <div class="mt" style="margin-top:4px">${kindIcon} <span style="font-size:11px">${fmt(m.created_at)}</span></div>
         </div>
         <div style="display:flex;flex-direction:column;gap:4px">
@@ -2785,28 +3168,55 @@ function openComposeModal(toUsername, toName, kindDefault = 'message') {
         <textarea id="msg-body" rows="4" placeholder="Type your message…" autofocus></textarea>
         <span class="hint">Up to 2000 characters</span>
       </div>
+      <div class="form-group full">
+        <label>Attachment <span class="dim">(optional, max 5 MB)</span></label>
+        <input id="msg-file" type="file"
+               accept=".png,.jpg,.jpeg,.gif,.webp,.heic,.pdf,.txt,.csv,.doc,.docx,.xls,.xlsx">
+        <span class="hint" id="msg-file-hint">Images, PDFs, or office documents</span>
+      </div>
     </div>
     <div class="form-actions">
       <button class="btn btn-ghost" id="msg-cancel">Cancel</button>
       <button class="btn btn-primary-accent" id="msg-send">${icon('send',12)}<span>Send</span></button>
     </div>`);
 
+  // Live filename + size hint, with a hard 5 MB client-side guard
+  const fileInput = $('msg-file');
+  const fileHint  = $('msg-file-hint');
+  fileInput.onchange = () => {
+    const f = fileInput.files[0];
+    if (!f) { fileHint.textContent = 'Images, PDFs, or office documents'; return; }
+    if (f.size > 5 * 1024 * 1024) {
+      toast('File is larger than 5 MB', 'warning');
+      fileInput.value = '';
+      fileHint.textContent = 'Images, PDFs, or office documents';
+      return;
+    }
+    fileHint.textContent = `${f.name} · ${(f.size / 1024).toFixed(0)} KB`;
+  };
+
   $('msg-cancel').onclick = closeModal;
   $('msg-send').onclick = async () => {
     const body = $('msg-body').value.trim();
-    if (!body) { toast('Body cannot be empty', 'warning'); return; }
+    const file = fileInput.files[0] || null;
+    if (!body && !file) { toast('Add a message or an attachment', 'warning'); return; }
     const btn = $('msg-send');
     btn.disabled = true;
     btn.innerHTML = 'Sending…';
     try {
-      await api('POST', '/messages', {
-        to_username: toUsername,
-        kind:        $('msg-kind').value,
-        body,
-      });
+      // Always multipart so the same endpoint handles file + text uniformly.
+      const fd = new FormData();
+      fd.append('to_username', toUsername);
+      fd.append('kind',        $('msg-kind').value);
+      fd.append('body',        body);
+      if (file) fd.append('attachment', file);
+
+      const res  = await fetch('/api/messages', { method: 'POST', body: fd });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || 'Send failed');
+
       toast(`Sent to ${toName}`, 'success');
       closeModal();
-      // If we sent from the Team page, refresh the inbox to show our reply landed
       if (currentPage === 'team') {
         const inbox = $('tm-inbox'); if (inbox) inbox.dispatchEvent(new Event('refresh'));
       }
@@ -2817,6 +3227,19 @@ function openComposeModal(toUsername, toName, kindDefault = 'message') {
       btn.innerHTML = `${icon('send',12)}<span>Send</span>`;
     }
   };
+}
+
+// Small reusable chip that links to a message attachment download
+function attachmentChip(m) {
+  if (!m.attachment_path) return '';
+  const sizeKB = m.attachment_size ? Math.max(1, Math.round(m.attachment_size / 1024)) : null;
+  const sizeLabel = sizeKB ? `${sizeKB} KB` : '';
+  return `<a href="/api/messages/${m.id}/attachment" target="_blank" rel="noopener"
+             class="msg-attach" title="Download ${escapeHtml(m.attachment_name || 'attachment')}">
+            ${icon('fileText', 12, 'blue')}
+            <span class="msg-attach-name">${escapeHtml(m.attachment_name || 'Attachment')}</span>
+            ${sizeLabel ? `<span class="msg-attach-size">${sizeLabel}</span>` : ''}
+          </a>`;
 }
 
 /* ════════════════════════════════════════════════════════════════
@@ -2952,8 +3375,8 @@ PAGES['audit-log'] = async (el) => {
     </div>
     <div class="card">
       <div class="filter-row">
-        <div class="filter-input" style="flex:1"><input id="al-actor" placeholder="Filter by username…"></div>
-        <select id="al-action" style="height:36px;padding:0 12px;border:1px solid var(--border-2);border-radius:var(--r-sm);outline:none;background:var(--surface);font-size:13px">
+        <div class="filter-input"><input id="al-actor" placeholder="Filter by username…"></div>
+        <select id="al-action">
           <option value="">All actions</option>
           <option value="login.ok">login.ok</option>
           <option value="login.fail">login.fail</option>
@@ -2963,7 +3386,7 @@ PAGES['audit-log'] = async (el) => {
           <option value="patient.delete">patient.delete</option>
           <option value="audit.export">audit.export</option>
         </select>
-        <input id="al-since" type="date" style="height:36px;padding:0 12px;border:1px solid var(--border-2);border-radius:var(--r-sm);outline:none;background:var(--surface);font-size:13px">
+        <input id="al-since" type="date">
       </div>
       <div id="al-table">${skelRows(8)}</div>
     </div>`;

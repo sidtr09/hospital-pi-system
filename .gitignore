@@ -4,5 +4,6 @@ database/hospital.db-shm
 database/hospital.db-wal
 backup/hospital_backup_*.db
 logs/
+data/
 .env
 .DS_Store

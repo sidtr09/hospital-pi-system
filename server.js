@@ -1,5 +1,5 @@
 /**
- * [ Website Name ] — Primary Backend Framework Configuration
+ * Cliniq — Primary Backend Framework Configuration
  * Target: Raspberry Pi 3B+ | LAN-Only Deployment | Express.js
  *
  * Performance Contract:
@@ -132,7 +132,7 @@ app.use((err, req, res, _next) => {
 async function bootstrap() {
   await db.initialize();
   app.listen(appConfig.port, appConfig.host, () => {
-    console.log(`[ Website Name ] running on http://${appConfig.host}:${appConfig.port}`);
+    console.log(`Cliniq running on http://${appConfig.host}:${appConfig.port}`);
     console.log(`Environment : ${appConfig.env}`);
     console.log(`Database    : ${appConfig.dbPath}`);
   });
