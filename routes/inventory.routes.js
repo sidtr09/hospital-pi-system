@@ -45,19 +45,24 @@ router.get('/alerts/low-stock', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
-// GET /api/inventory/alerts/expiring?days=<n>
+// GET /api/inventory/alerts/expiring?days=<n>&include_expired=1
+//   Default behaviour preserved (items expiring within `days`, default 30).
+//   When `include_expired=1`, already-expired rows are also returned — the
+//   Expiring-Soon page wants those at the top so they can be pulled from
+//   shelves before being dispensed.
 router.get('/alerts/expiring', async (req, res, next) => {
   try {
     const days = Math.max(1, parseInt(req.query.days || '30', 10));
+    const includeExpired = req.query.include_expired === '1';
     const items = await db.all(
       `SELECT * FROM inventory_items
        WHERE expiry_date IS NOT NULL
          AND expiry_date <= date('now', ? || ' days')
-         AND expiry_date >= date('now')
+         ${includeExpired ? '' : "AND expiry_date >= date('now')"}
        ORDER BY expiry_date ASC`,
       [`+${days}`]
     );
-    res.json({ data: items, window_days: days });
+    res.json({ data: items, window_days: days, include_expired: includeExpired });
   } catch (err) { next(err); }
 });
 
