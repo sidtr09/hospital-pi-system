@@ -36,6 +36,11 @@ function requireAdmin(req, res, next) {
 }
 
 // ── POST /api/auth/login ─────────────────────────────────────────────────────
+//   Lookup order is DB-first then demo, so that once an admin (or any demo
+//   account) changes their password the DB "claim" row takes precedence and
+//   the original hardcoded password no longer works. This matters because
+//   the Pi ships with admin/admin123 and the hospital is expected to change
+//   it on first login.
 router.post('/login', async (req, res, next) => {
   try {
     const { username, password } = req.body;
@@ -43,7 +48,33 @@ router.post('/login', async (req, res, next) => {
       return res.status(400).json({ error: 'Username and password required' });
     }
 
-    // Try demo accounts first
+    // Real database users first — a claim row trumps any hardcoded demo.
+    const dbUser = await db.get('SELECT * FROM users WHERE username = ?', [username]);
+    if (dbUser) {
+      if (dbUser.status === 'pending') {
+        return res.status(403).json({
+          error: 'Your account is awaiting administrator approval. Please check back later.',
+          code: 'pending',
+        });
+      }
+      if (dbUser.status === 'rejected') {
+        return res.status(403).json({
+          error: 'Your account request was not approved. Please contact your administrator.',
+          code: 'rejected',
+        });
+      }
+      if (!verifyPassword(password, dbUser.password_hash)) {
+        return res.status(401).json({ error: 'Invalid username or password' });
+      }
+      req.session.userId       = dbUser.id;
+      req.session.userUsername = dbUser.username;
+      req.session.userName     = dbUser.full_name;
+      req.session.userRole     = dbUser.role;
+      return res.json({ ok: true, name: dbUser.full_name, role: dbUser.role });
+    }
+
+    // Fallback: hardcoded demo account (only on a fresh install — once
+    // the user changes their password we create a DB row and skip this branch).
     const demo = DEMO_USERS.find(u => u.username === username);
     if (demo) {
       if (demo.password !== password) {
@@ -56,32 +87,7 @@ router.post('/login', async (req, res, next) => {
       return res.json({ ok: true, name: demo.name, role: demo.role });
     }
 
-    // Then real database users
-    const user = await db.get('SELECT * FROM users WHERE username = ?', [username]);
-    if (!user) {
-      return res.status(401).json({ error: 'Invalid username or password' });
-    }
-    if (user.status === 'pending') {
-      return res.status(403).json({
-        error: 'Your account is awaiting administrator approval. Please check back later.',
-        code: 'pending',
-      });
-    }
-    if (user.status === 'rejected') {
-      return res.status(403).json({
-        error: 'Your account request was not approved. Please contact your administrator.',
-        code: 'rejected',
-      });
-    }
-    if (!verifyPassword(password, user.password_hash)) {
-      return res.status(401).json({ error: 'Invalid username or password' });
-    }
-
-    req.session.userId       = user.id;
-    req.session.userUsername = user.username;
-    req.session.userName     = user.full_name;
-    req.session.userRole     = user.role;
-    res.json({ ok: true, name: user.full_name, role: user.role });
+    return res.status(401).json({ error: 'Invalid username or password' });
   } catch (err) { next(err); }
 });
 
@@ -91,6 +97,73 @@ router.post('/logout', (req, res) => {
 });
 
 // ── GET /api/auth/me ─────────────────────────────────────────────────────────
+// ── POST /api/auth/change-password ──────────────────────────────────────────
+//   Works for both demo accounts and DB users. For demo accounts (id < 0)
+//   we INSERT or UPDATE a claim row in the users table; subsequent logins
+//   route through the DB branch and the old hardcoded password no longer
+//   works. This is how a fresh-install admin secures their Pi.
+router.post('/change-password', async (req, res, next) => {
+  try {
+    if (!req.session?.userId) return res.status(401).json({ error: 'Not signed in' });
+    const { current_password, new_password } = req.body;
+    if (!current_password || !new_password) {
+      return res.status(400).json({ error: 'Current and new passwords are required' });
+    }
+    if (new_password.length < 6) {
+      return res.status(400).json({ error: 'New password must be at least 6 characters' });
+    }
+    if (current_password === new_password) {
+      return res.status(400).json({ error: 'New password must be different from your current one' });
+    }
+
+    const me = req.session.userUsername;
+    const newHash = hashPassword(new_password);
+
+    // Demo account branch — claim it by writing a row to users
+    if (req.session.userId < 0) {
+      const demo = DEMO_USERS.find(u => u.username === me);
+      if (!demo || demo.password !== current_password) {
+        return res.status(401).json({ error: 'Current password is incorrect' });
+      }
+      const existing = await db.get('SELECT id FROM users WHERE username = ?', [me]);
+      if (existing) {
+        await db.run(
+          `UPDATE users SET password_hash = ?,
+             decided_at = strftime('%Y-%m-%dT%H:%M:%SZ','now'),
+             decided_by = 'self'
+           WHERE id = ?`,
+          [newHash, existing.id]
+        );
+      } else {
+        await db.run(
+          `INSERT INTO users (username, password_hash, full_name, role, status, decided_at, decided_by)
+           VALUES (?, ?, ?, ?, 'approved', strftime('%Y-%m-%dT%H:%M:%SZ','now'), 'self')`,
+          [demo.username, newHash, demo.name, demo.role]
+        );
+      }
+      // Re-anchor the session to the new DB row so subsequent calls
+      // (including the next change-password) take the DB branch.
+      const row = await db.get('SELECT id FROM users WHERE username = ?', [me]);
+      if (row) req.session.userId = row.id;
+      return res.json({ ok: true });
+    }
+
+    // Real DB user branch
+    const user = await db.get('SELECT * FROM users WHERE id = ?', [req.session.userId]);
+    if (!user) return res.status(404).json({ error: 'Account not found' });
+    if (!verifyPassword(current_password, user.password_hash)) {
+      return res.status(401).json({ error: 'Current password is incorrect' });
+    }
+    await db.run(
+      `UPDATE users SET password_hash = ?,
+         decided_at = strftime('%Y-%m-%dT%H:%M:%SZ','now')
+       WHERE id = ?`,
+      [newHash, user.id]
+    );
+    res.json({ ok: true });
+  } catch (err) { next(err); }
+});
+
 router.get('/me', (req, res) => {
   if (!req.session?.userId) return res.status(401).json({ error: 'Not logged in' });
   res.json({ name: req.session.userName, role: req.session.userRole });

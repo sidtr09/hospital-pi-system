@@ -110,6 +110,9 @@ const ICONS = {
   inbox:        '<polyline points="22 12 16 12 14 15 10 15 8 12 2 12"/><path d="M5.45 5.11L2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/>',
   send:         '<line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/>',
   zap:          '<polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>',
+  settings:     '<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>',
+  lock:         '<rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>',
+  shield:       '<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>',
 };
 
 const ICON_TONES = {
@@ -376,6 +379,8 @@ const ROLE_CONFIG = {
       { page: 'team',             icon: 'users',     tone: 'violet', label: 'Team' },
       { section: 'Administration' },
       { page: 'staff-accounts',   icon: 'shieldCheck', tone: 'teal',  label: 'Staff Accounts' },
+      { section: 'Account' },
+      { page: 'settings',         icon: 'settings',  tone: 'gray',   label: 'Settings' },
     ],
   },
   Doctor: {
@@ -393,6 +398,8 @@ const ROLE_CONFIG = {
       { page: 'team',             icon: 'users',     tone: 'violet', label: 'Team' },
       { section: 'Resources' },
       { page: 'doc-library',      icon: 'book',      tone: 'indigo', label: 'Documents' },
+      { section: 'Account' },
+      { page: 'settings',         icon: 'settings',  tone: 'gray',   label: 'Settings' },
     ],
   },
   Nurse: {
@@ -411,6 +418,8 @@ const ROLE_CONFIG = {
       { page: 'team',             icon: 'users',     tone: 'violet', label: 'Team' },
       { section: 'Inventory' },
       { page: 'stock-ledger',     icon: 'package',   tone: 'orange', label: 'Stock Ledger' },
+      { section: 'Account' },
+      { page: 'settings',         icon: 'settings',  tone: 'gray',   label: 'Settings' },
     ],
   },
 };
@@ -2490,6 +2499,122 @@ function openComposeModal(toUsername, toName, kindDefault = 'message') {
     }
   };
 }
+
+/* ════════════════════════════════════════════════════════════════
+   SETTINGS — change password (all roles)
+════════════════════════════════════════════════════════════════ */
+PAGES['settings'] = (el) => {
+  const initial = (currentUser || '?').charAt(0).toUpperCase();
+  el.innerHTML = `
+    <div class="page-header">
+      <div><h1>Settings</h1><p>Account and security</p></div>
+    </div>
+
+    <div class="col-6040">
+      <!-- Change password -->
+      <div class="card">
+        <div class="card-head">
+          <h2>${icon('lock', 16, 'teal')}Change Password</h2>
+          <span class="meta">Required on a fresh install</span>
+        </div>
+        <div class="card-body">
+          <div id="st-msg"></div>
+
+          <div class="alert alert-info" style="margin-bottom:16px">
+            ${icon('shield',14,'blue')}<span>The Pi ships with default demo passwords. <strong>Change them before opening the system to the ward.</strong></span>
+          </div>
+
+          <div class="form-grid">
+            <div class="form-group full">
+              <label>Current Password <span class="req">*</span></label>
+              <input id="st-current" type="password" autocomplete="current-password">
+            </div>
+            <div class="form-group">
+              <label>New Password <span class="req">*</span></label>
+              <input id="st-new" type="password" autocomplete="new-password">
+              <span class="hint">At least 6 characters</span>
+            </div>
+            <div class="form-group">
+              <label>Confirm New Password <span class="req">*</span></label>
+              <input id="st-confirm" type="password" autocomplete="new-password">
+            </div>
+          </div>
+          <div class="form-actions">
+            <button class="btn btn-ghost" id="st-clear">Clear</button>
+            <button class="btn btn-primary-accent" id="st-save">${icon('lock',12)}<span>Update Password</span></button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Profile summary (read-only) -->
+      <div class="card">
+        <div class="card-head"><h2>${icon('user',16,'teal')}Profile</h2></div>
+        <div class="card-body" style="display:flex;flex-direction:column;align-items:center;gap:12px;padding-top:24px">
+          <div class="rail-avatar" style="width:64px;height:64px;font-size:24px">${escapeHtml(initial)}</div>
+          <div style="text-align:center">
+            <div style="font-size:16px;font-weight:700">${escapeHtml(currentUser||'—')}</div>
+            <div style="font-size:12px;color:var(--text-mut);margin-top:2px">${badge(currentRole||'—', roleBadgeTone(currentRole))}</div>
+          </div>
+          <div style="width:100%;margin-top:8px;padding-top:16px;border-top:1px solid var(--border-2)">
+            <div style="display:flex;justify-content:space-between;font-size:12px;padding:6px 0">
+              <span style="color:var(--text-mut)">Role</span>
+              <span style="font-weight:600">${escapeHtml(currentRole||'—')}</span>
+            </div>
+            <div style="display:flex;justify-content:space-between;font-size:12px;padding:6px 0">
+              <span style="color:var(--text-mut)">Display name</span>
+              <span style="font-weight:600">${escapeHtml(currentUser||'—')}</span>
+            </div>
+            <div class="hint" style="margin-top:14px">More profile options will appear here in future updates.</div>
+          </div>
+        </div>
+      </div>
+    </div>`;
+
+  // Wire form
+  $('st-clear').onclick = () => {
+    ['st-current','st-new','st-confirm'].forEach(id => $(id).value = '');
+    setHTML('st-msg', '');
+    $('st-current').focus();
+  };
+
+  $('st-save').onclick = async () => {
+    const current = $('st-current').value;
+    const fresh   = $('st-new').value;
+    const confirm = $('st-confirm').value;
+
+    if (!current || !fresh || !confirm) {
+      return setHTML('st-msg', `<div class="alert alert-error">All fields are required</div>`);
+    }
+    if (fresh.length < 6) {
+      return setHTML('st-msg', `<div class="alert alert-error">New password must be at least 6 characters</div>`);
+    }
+    if (fresh !== confirm) {
+      return setHTML('st-msg', `<div class="alert alert-error">The two new passwords don't match</div>`);
+    }
+    if (fresh === current) {
+      return setHTML('st-msg', `<div class="alert alert-error">New password must be different from your current one</div>`);
+    }
+
+    const btn = $('st-save');
+    btn.disabled = true;
+    btn.innerHTML = 'Updating…';
+    try {
+      await api('POST', '/auth/change-password', {
+        current_password: current,
+        new_password:     fresh,
+      });
+      setHTML('st-msg', `<div class="alert alert-ok">${icon('check',14,'green')}<span>Password updated. Use your new password the next time you sign in.</span></div>`);
+      ['st-current','st-new','st-confirm'].forEach(id => $(id).value = '');
+      toast('Password updated', 'success');
+    } catch (err) {
+      setHTML('st-msg', `<div class="alert alert-error">${escapeHtml(err.message)}</div>`);
+    }
+    btn.disabled = false;
+    btn.innerHTML = `${icon('lock',12)}<span>Update Password</span>`;
+  };
+
+  $('st-current').focus();
+};
 
 /* ════════════════════════════════════════════════════════════════
    DOCUMENT LIBRARY
