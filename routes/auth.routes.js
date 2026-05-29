@@ -217,12 +217,16 @@ router.get('/staff', async (req, res, next) => {
        FROM users WHERE status = 'approved'
        ORDER BY full_name ASC`
     );
-    const demoRows = DEMO_USERS.map(u => ({
-      username:  u.username,
-      full_name: u.name,
-      role:      u.role,
-      is_demo:   true,
-    }));
+    // A claimed demo account exists in BOTH places; the DB row wins.
+    const claimed = new Set(dbUsers.map(u => u.username));
+    const demoRows = DEMO_USERS
+      .filter(u => !claimed.has(u.username))
+      .map(u => ({
+        username:  u.username,
+        full_name: u.name,
+        role:      u.role,
+        is_demo:   true,
+      }));
     const all = [...demoRows, ...dbUsers]
       .filter(u => u.username !== me); // exclude self
     res.json({ data: all, count: all.length });
@@ -244,19 +248,24 @@ router.get('/users', requireAdmin, async (req, res, next) => {
     sql += ' ORDER BY requested_at DESC';
     const dbUsers = await db.all(sql, params);
 
-    // Demo accounts (hardcoded, always "approved") — pinned to the top
+    // Demo accounts (hardcoded, always "approved") — pinned to the top,
+    // but if a demo username has been "claimed" (password-changed) the
+    // DB row already covers it and we skip the demo placeholder.
+    const claimed = new Set(dbUsers.map(u => u.username));
     const showDemo = !status || status === 'approved';
-    const demoRows = showDemo ? DEMO_USERS.map(u => ({
-      id:            u.id,
-      username:      u.username,
-      full_name:     u.name,
-      role:          u.role,
-      status:        'approved',
-      requested_at:  null,
-      decided_at:    null,
-      decided_by:    null,
-      is_demo:       true,
-    })) : [];
+    const demoRows = showDemo ? DEMO_USERS
+      .filter(u => !claimed.has(u.username))
+      .map(u => ({
+        id:            u.id,
+        username:      u.username,
+        full_name:     u.name,
+        role:          u.role,
+        status:        'approved',
+        requested_at:  null,
+        decided_at:    null,
+        decided_by:    null,
+        is_demo:       true,
+      })) : [];
 
     const all = [...demoRows, ...dbUsers];
     res.json({ data: all, count: all.length });
