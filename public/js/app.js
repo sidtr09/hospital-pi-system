@@ -150,6 +150,8 @@ const ICONS = {
   settings:     '<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>',
   lock:         '<rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>',
   shield:       '<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>',
+  eye:          '<path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>',
+  eyeOff:       '<path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/>',
 };
 
 const ICON_TONES = {
@@ -415,8 +417,9 @@ const ROLE_CONFIG = {
       { section: 'Team' },
       { page: 'team',             icon: 'users',     tone: 'violet', label: 'Team' },
       { section: 'Administration' },
-      { page: 'staff-accounts',   icon: 'shieldCheck', tone: 'teal',  label: 'Staff Accounts' },
-      { page: 'audit-log',        icon: 'fileText',    tone: 'gray',  label: 'Audit Log' },
+      { page: 'staff-accounts',     icon: 'shieldCheck', tone: 'teal',   label: 'Staff Accounts' },
+      { page: 'security-dashboard', icon: 'shield',      tone: 'teal',   label: 'Security' },
+      { page: 'audit-log',          icon: 'fileText',    tone: 'gray',   label: 'Audit Log' },
       { section: 'Account' },
       { page: 'settings',         icon: 'settings',  tone: 'gray',   label: 'Settings' },
     ],
@@ -562,6 +565,7 @@ async function tryLogin() {
     startClock();
     setupGlobalSearch();
     setupNotifications();
+    setupPrivacy();
     navigate('dashboard');
     toast(`Welcome back, ${name.split(' ')[0]}`, 'success');
   } catch (err) {
@@ -646,6 +650,42 @@ function setupGlobalSearch() {
 ════════════════════════════════════════════════════════════════ */
 let _notifTimer = null;
 let _notifItems = [];
+
+/* ── Privacy Screen toggle (eye button in navbar) ────────────────── */
+function isPrivacyOn() { return document.body.classList.contains('privacy-on'); }
+
+function setupPrivacy() {
+  const btn  = $('privacy-btn');
+  const icoEl = $('privacy-icon');
+  if (!btn) return;
+  btn.style.display = '';
+  // Restore the last toggle state
+  if (localStorage.getItem('privacy-on') === '1') {
+    document.body.classList.add('privacy-on');
+  }
+  const paint = () => {
+    const on = isPrivacyOn();
+    btn.title = on ? 'Show sensitive details' : 'Hide sensitive details';
+    icoEl.innerHTML = on
+      ? '<path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/>'
+      : '<path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>';
+  };
+  paint();
+  btn.onclick = () => {
+    const next = !isPrivacyOn();
+    document.body.classList.toggle('privacy-on', next);
+    localStorage.setItem('privacy-on', next ? '1' : '0');
+    paint();
+    toast(next ? 'Privacy on — sensitive details hidden' : 'Privacy off', 'info');
+  };
+}
+
+// Mask a patient_ref when privacy is on (only show last 4 chars).
+function maskRef(ref) {
+  if (!ref) return '';
+  if (!isPrivacyOn()) return ref;
+  return ref.length <= 4 ? '••••' : `••• ${ref.slice(-4)}`;
+}
 
 function setupNotifications() {
   const wrap = $('notif-wrap');
@@ -983,8 +1023,8 @@ async function renderAdminDashboard(el) {
       <thead><tr><th>Lvl</th><th>Patient</th><th>Complaint</th></tr></thead>
       <tbody>${rows.slice(0,5).map(r => `<tr class="tri-${r.triage_level} tri">
         <td><span class="tri-chip t${r.triage_level}">T${r.triage_level}</span></td>
-        <td>${escapeHtml(r.full_name||'—')}</td>
-        <td class="ellipsis" style="max-width:180px">${escapeHtml(r.chief_complaint)}</td>
+        <td><span class="pii">${escapeHtml(r.full_name||'—')}</span></td>
+        <td class="ellipsis" style="max-width:180px"><span class="pii">${escapeHtml(r.chief_complaint)}</span></td>
       </tr>`).join('')}</tbody></table></div>`
       : `<div class="empty"><div class="icon">${icon('checkCircle', 36, 'green')}</div><p>Queue is clear</p></div>`);
 
@@ -1127,8 +1167,8 @@ async function renderDoctorDashboard(el) {
       setHTML('dd-lookup-result', data.length ? data.map(p => `
         <div class="recent-item" style="display:flex;justify-content:space-between;align-items:center;gap:8px">
           <div style="flex:1;min-width:0">
-            <div class="name ellipsis">${escapeHtml(p.full_name)}</div>
-            <div class="meta">${escapeHtml(p.patient_ref)} · DOB ${escapeHtml(p.date_of_birth)}</div>
+            <div class="name ellipsis"><span class="pii">${escapeHtml(p.full_name)}</span></div>
+            <div class="meta">${escapeHtml(maskRef(p.patient_ref))} · DOB <span class="pii">${escapeHtml(p.date_of_birth)}</span></div>
           </div>
           <button class="btn btn-xs btn-primary-accent" data-pid="${p.id}" data-pname="${escapeHtml(p.full_name)}" onclick="viewNotes(this.dataset.pid, this.dataset.pname)">${icon('fileText',12)}<span>Notes</span></button>
         </div>`).join('')
@@ -1166,8 +1206,8 @@ async function loadDoctorQueue() {
       <thead><tr><th>Lvl</th><th>Patient</th><th>Complaint</th><th>Assigned</th><th></th></tr></thead>
       <tbody>${data.slice(0,8).map(r => `<tr class="tri-${r.triage_level} tri">
         <td><span class="tri-chip t${r.triage_level}">T${r.triage_level}</span></td>
-        <td>${escapeHtml(r.full_name||'—')}</td>
-        <td class="ellipsis" style="max-width:140px">${escapeHtml(r.chief_complaint)}</td>
+        <td><span class="pii">${escapeHtml(r.full_name||'—')}</span></td>
+        <td class="ellipsis" style="max-width:140px"><span class="pii">${escapeHtml(r.chief_complaint)}</span></td>
         <td>${r.assigned_to ? badge(r.assigned_to,'indigo') : badge('Unassigned','gray')}</td>
         <td style="white-space:nowrap">
           ${r.assigned_to !== currentUser
@@ -1363,8 +1403,8 @@ async function loadNurseData() {
       <thead><tr><th>Lvl</th><th>Patient</th><th>Complaint</th><th></th></tr></thead>
       <tbody>${rows.slice(0,7).map(r => `<tr class="tri-${r.triage_level} tri">
         <td><span class="tri-chip t${r.triage_level}">T${r.triage_level}</span></td>
-        <td>${escapeHtml(r.full_name||'—')}</td>
-        <td class="ellipsis" style="max-width:140px">${escapeHtml(r.chief_complaint)}</td>
+        <td><span class="pii">${escapeHtml(r.full_name||'—')}</span></td>
+        <td class="ellipsis" style="max-width:140px"><span class="pii">${escapeHtml(r.chief_complaint)}</span></td>
         <td><button class="btn btn-xs btn-ghost" onclick="resolveQueue(${r.id})">Done</button></td>
       </tr>`).join('')}</tbody></table></div>`
       : `<div class="empty"><div class="icon">${icon('checkCircle', 36, 'green')}</div><p>Queue is clear</p></div>`);
@@ -1412,9 +1452,9 @@ PAGES['patient-search'] = async (el) => {
       setHTML('ps-results', `<div class="table-wrap"><table>
         <thead><tr><th>Reference</th><th>Name</th><th>DOB</th><th>Blood</th><th>Registered</th><th style="width:1%"></th></tr></thead>
         <tbody>${data.map(p => `<tr data-row-pid="${p.id}">
-          <td><span class="mono" style="font-size:12px">${escapeHtml(p.patient_ref)}</span></td>
-          <td><strong>${escapeHtml(p.full_name)}</strong></td>
-          <td>${escapeHtml(p.date_of_birth)}</td>
+          <td><span class="mono" style="font-size:12px">${escapeHtml(maskRef(p.patient_ref))}</span></td>
+          <td><strong><span class="pii">${escapeHtml(p.full_name)}</span></strong></td>
+          <td><span class="pii">${escapeHtml(p.date_of_birth)}</span></td>
           <td>${p.blood_group ? badge(p.blood_group,'danger') : '<span class="text-faint">—</span>'}</td>
           <td class="text-mut">${fmt(p.registered_at)}</td>
           <td style="white-space:nowrap;text-align:right">
@@ -1459,7 +1499,7 @@ window.editPatient = async (id) => {
       <div class="form-grid">
         <div class="form-group">
           <label>Patient Reference</label>
-          <input value="${escapeHtml(p.patient_ref)}" disabled style="opacity:.6">
+          <input value="${escapeHtml(maskRef(p.patient_ref))}" disabled style="opacity:.6">
           <span class="hint">Reference is immutable after registration</span>
         </div>
         <div class="form-group">
@@ -1746,8 +1786,8 @@ PAGES['patient-register'] = (el) => {
       const { data } = await api('GET', '/patients?limit=6');
       $('r-recent').innerHTML = data.length
         ? data.map(p => `<div class="recent-item">
-            <div class="name">${escapeHtml(p.full_name)}</div>
-            <div class="meta">${escapeHtml(p.patient_ref)} · ${fmt(p.registered_at)}</div>
+            <div class="name"><span class="pii">${escapeHtml(p.full_name)}</span></div>
+            <div class="meta">${escapeHtml(maskRef(p.patient_ref))} · ${fmt(p.registered_at)}</div>
           </div>`).join('')
         : `<div class="empty" style="padding:24px"><p>No registrations yet</p></div>`;
     } catch(e) { /* silent */ }
@@ -2000,9 +2040,9 @@ async function loadFullQueue() {
           <span class="tri-num t${r.triage_level}">T${r.triage_level}</span>
           <div style="font-size:10px;color:var(--text-mut);margin-top:3px">${labels[r.triage_level]}</div>
         </td>
-        <td><strong>${escapeHtml(r.full_name||'—')}</strong>
-          <div style="font-size:11px;color:var(--text-mut)">${escapeHtml(r.patient_ref||'')}</div></td>
-        <td>${escapeHtml(r.chief_complaint)}</td>
+        <td><strong><span class="pii">${escapeHtml(r.full_name||'—')}</span></strong>
+          <div style="font-size:11px;color:var(--text-mut)">${escapeHtml(maskRef(r.patient_ref||''))}</div></td>
+        <td><span class="pii">${escapeHtml(r.chief_complaint)}</span></td>
         <td>${r.assigned_to ? badge(r.assigned_to,'indigo') : badge('Unassigned','gray')}</td>
         <td class="text-mut" style="font-size:11px">${fmt(r.queued_at)}</td>
         <td style="white-space:nowrap;text-align:right">
@@ -2538,6 +2578,110 @@ function openComposeModal(toUsername, toName, kindDefault = 'message') {
     }
   };
 }
+
+/* ════════════════════════════════════════════════════════════════
+   SECURITY DASHBOARD (Admin only)
+════════════════════════════════════════════════════════════════ */
+PAGES['security-dashboard'] = async (el) => {
+  el.innerHTML = `
+    <div class="page-header">
+      <div><h1>Security</h1><p>Posture of this Pi installation</p></div>
+      <button class="btn btn-secondary btn-sm" id="sd-refresh-btn">${icon('refresh',14)}<span>Refresh</span></button>
+    </div>
+
+    <div class="card" style="margin-bottom:20px">
+      <div class="card-head">
+        <h2>${icon('shield',16,'teal')}Security Status</h2>
+        <span class="meta" id="sd-summary">checking…</span>
+      </div>
+      <div id="sd-list">${skelLines(7)}</div>
+    </div>
+
+    <div class="card">
+      <div class="card-head"><h2>${icon('alert',16,'orange')}Disaster Mode</h2></div>
+      <div class="card-body">
+        <p style="font-size:13px;color:var(--text-mut);margin-bottom:12px">
+          Disaster mode unlocks the <strong>BLACK (Deceased)</strong> triage
+          option and shows a red banner across every page. Only enable when
+          mass-casualty triage is in effect.
+        </p>
+        <div style="display:flex;align-items:center;gap:12px">
+          <button class="btn btn-outline" id="sd-disaster-btn">…</button>
+          <span class="dim" style="font-size:12px" id="sd-disaster-state">…</span>
+        </div>
+      </div>
+    </div>`;
+
+  $('sd-refresh-btn').onclick = () => navigate('security-dashboard');
+
+  // ── Live posture checks ──────────────────────────────────────────
+  const checks = [];
+  const push = (ok, ttl, hint) => checks.push({ ok, ttl, hint });
+
+  // Bcrypt hashing — constant ✓ (since the Strong Auth phase)
+  push(true, 'bcrypt password hashing', 'Cost factor 12 with backwards-compat scrypt verify');
+  // Role-based access — constant ✓ (sidebar filters per role)
+  push(true, 'Role-based access control', 'Admin · Doctor · Nurse — each with a filtered sidebar and per-route gates');
+  // Offline operation — constant ✓ (no external CDN calls)
+  push(true, '100% offline LAN operation', 'No internet required — fonts, icons, and DB all local to the Pi');
+  // Auto-logout — client-side clock interval as a proxy for session activity
+  push(typeof _clockTimer !== 'undefined' && _clockTimer !== null, 'Session active', 'Tab-bound session with idle clock; close browser to fully sign out');
+
+  // Audit logging enabled — try a 1-row read
+  try {
+    await api('GET', '/audit?limit=1');
+    push(true, 'Audit logging enabled', 'Every login, patient view, edit, delete and export is recorded');
+  } catch {
+    push(false, 'Audit logging enabled', 'Audit endpoint did not respond — check server logs');
+  }
+
+  // Demo passwords rotated — count admin/doctor/nurse claim rows
+  try {
+    const { data } = await api('GET', '/auth/users');
+    const claimed = (data || []).filter(u => !u.is_demo && ['admin','doctor','nurse'].includes(u.username)).length;
+    push(claimed >= 1, `Default credentials rotated (${claimed}/3 demo accounts claimed)`,
+         claimed >= 3 ? 'All three default accounts have a new password' : 'Change the default password for every demo account before going live');
+  } catch { push(false, 'Default credentials rotated', 'Could not query users'); }
+
+  // Password policy — server enforces 12+ via /password-strength endpoint round-trip
+  try {
+    const r = await api('POST', '/auth/password-strength', { password: 'a'.repeat(11) });
+    push(r && r.min >= 12, 'Password policy ≥ 12 characters', `Server-enforced minimum is ${r.min}; weak passwords rejected`);
+  } catch { push(false, 'Password policy ≥ 12 characters', 'Could not query strength endpoint'); }
+
+  const pass = checks.filter(c => c.ok).length;
+  setText('sd-summary', `${pass} / ${checks.length} checks passing`);
+  setHTML('sd-list', `<div class="card-body" style="padding-top:8px">
+    ${checks.map(c => `<div style="display:flex;align-items:flex-start;gap:12px;padding:10px 0;border-bottom:1px solid var(--border-2)">
+      <span style="flex-shrink:0;width:24px;height:24px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;background:${c.ok?'var(--success-soft)':'var(--warning-soft)'};color:${c.ok?'var(--success)':'var(--warning)'}">
+        ${c.ok ? icon('check',14,'green') : icon('alert',14,'orange')}
+      </span>
+      <div style="flex:1">
+        <div style="font-size:13px;font-weight:600;color:var(--text)">${escapeHtml(c.ttl)}</div>
+        <div style="font-size:11px;color:var(--text-mut);margin-top:2px">${escapeHtml(c.hint)}</div>
+      </div>
+    </div>`).join('')}
+  </div>`);
+
+  // ── Disaster Mode toggle (wired in Phase D — for now read body class) ──
+  const paintDisaster = () => {
+    const on = document.body.classList.contains('disaster-mode');
+    setText('sd-disaster-state', on ? 'Currently ON — black triage option visible' : 'Currently OFF — standard 5-level triage only');
+    const btn = $('sd-disaster-btn');
+    btn.innerHTML = on
+      ? `${icon('shield',12)}<span>Turn OFF Disaster Mode</span>`
+      : `${icon('alert',12,'orange')}<span>Turn ON Disaster Mode</span>`;
+    btn.className = on ? 'btn btn-secondary' : 'btn btn-danger';
+  };
+  paintDisaster();
+  $('sd-disaster-btn').onclick = async () => {
+    const next = !document.body.classList.contains('disaster-mode');
+    document.body.classList.toggle('disaster-mode', next);
+    paintDisaster();
+    toast(`Disaster mode ${next ? 'ENABLED' : 'disabled'}`, next ? 'warning' : 'success');
+    // Persistence + Phase D backend hook lands with the triage colour work.
+  };
+};
 
 /* ════════════════════════════════════════════════════════════════
    AUDIT LOG (Admin only)

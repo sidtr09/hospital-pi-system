@@ -354,6 +354,41 @@ table td:has(.badge),
 }
 .notif-btn:hover { background: var(--surface-2); color: var(--text); }
 .notif-btn.has-items { color: var(--accent); border-color: var(--accent-soft); }
+
+/* ─── Privacy Screen toggle — same shape as notif-btn ──────────────── */
+.privacy-btn {
+  width: 36px; height: 36px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  color: var(--text-mut);
+  transition: background .12s, color .12s, border-color .12s;
+}
+.privacy-btn:hover { background: var(--surface-2); color: var(--text); }
+body.privacy-on .privacy-btn {
+  color: var(--accent); border-color: var(--accent-soft);
+  background: var(--accent-tint);
+}
+
+/* When privacy is on, blur every .pii element. Layout preserved; the
+   value never has to leave the DOM so toggling back is instant. */
+body.privacy-on .pii { filter: blur(5px); transition: filter .15s; }
+body.privacy-on .pii:hover { filter: blur(0); }
+
+/* ─── Disaster Mode banner (Phase D wires the body class) ──────────── */
+body.disaster-mode::before {
+  content: '⚠ DISASTER MODE ACTIVE — full triage palette including BLACK is available';
+  display: block; position: fixed; top: 0; left: 0; right: 0; z-index: 60;
+  background: #7f1d1d; color: white;
+  padding: 6px 16px; text-align: center;
+  font-size: 12px; font-weight: 700; letter-spacing: .5px;
+  text-transform: uppercase;
+}
+body.disaster-mode { padding-top: 28px; }
+body.disaster-mode .navbar { top: 28px; }
+body.disaster-mode .sidebar, body.disaster-mode .main { padding-top: 28px; }
 .notif-badge {
   position: absolute;
   top: -5px; right: -5px;
