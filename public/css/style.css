@@ -295,11 +295,38 @@ table td:has(.badge),
   border-radius: 99px;
 }
 .user-chip .avatar {
-  width: 24px; height: 24px; border-radius: 50%;
+  width: 28px; height: 28px; border-radius: 50%;
   background: var(--accent); color: white;
-  display: flex; align-items: center; justify-content: center;
+  display: inline-flex; align-items: center; justify-content: center;
   font-size: 11px; font-weight: 700;
+  letter-spacing: -.01em;
+  text-shadow: 0 1px 1px rgba(0,0,0,.18);
+  box-shadow:
+    inset 0 1px 0  rgba(255,255,255,.22),
+    inset 0 -3px 6px rgba(0,0,0,.14),
+    0 1px 2px rgba(15,23,42,.12);
 }
+
+/* ─── Avatar bead — used in pending list, inbox, team directory ─────── */
+.rail-avatar {
+  width: 36px; height: 36px;
+  border-radius: 50%;
+  background: var(--accent);  /* inline `background:` overrides for role tint */
+  color: white;
+  display: inline-flex; align-items: center; justify-content: center;
+  font-size: 13px; font-weight: 600;
+  letter-spacing: -.01em;
+  flex-shrink: 0;
+  text-shadow: 0 1px 1px rgba(0,0,0,.18);
+  /* Layered shadows give a soft bead look that works on top of any role colour */
+  box-shadow:
+    inset 0 1px 0  rgba(255,255,255,.24),
+    inset 0 -4px 8px rgba(0,0,0,.16),
+    0 1px 2px rgba(15,23,42,.12);
+  transition: transform .12s ease;
+}
+.rail-avatar:hover { transform: translateY(-1px); }
+
 .user-chip .meta { font-size: 12px; line-height: 1.2; }
 .user-chip .meta .name { font-weight: 600; color: var(--text); }
 .user-chip .meta .role { font-size: 10px; color: var(--text-mut); }

@@ -151,7 +151,7 @@ async function loadPendingApprovals(toastOnNew = false) {
     setText('ad-pending-count', `${count} pending`);
     setHTML('ad-pending-list', data.map(u => `
       <div class="pending-request" data-row-id="${u.id}">
-        <div class="rail-avatar" style="width:32px;height:32px;font-size:12px;margin:0;background:#fd7e14">${escapeHtml((u.full_name||'?').charAt(0).toUpperCase())}</div>
+        <div class="rail-avatar" style="width:34px;height:34px;font-size:13px;background:#fd7e14">${escapeHtml((u.full_name||'?').charAt(0).toUpperCase())}</div>
         <div class="who">
           <div class="nm">${escapeHtml(u.full_name)} <span style="font-weight:400;color:var(--text-mut)">· @${escapeHtml(u.username)}</span></div>
           <div class="mt">Requested role: <strong>${escapeHtml(u.role)}</strong> · ${fmt(u.requested_at)}</div>
@@ -2135,7 +2135,7 @@ PAGES['staff-accounts'] = async (el) => {
       <tbody>${rows.map(u => `
         <tr data-uid="${u.id}">
           <td>
-            <span class="rail-avatar" style="display:inline-flex;width:30px;height:30px;font-size:12px;margin:0;background:${roleColor(u.role)}">
+            <span class="rail-avatar" style="width:32px;height:32px;font-size:12px;background:${roleColor(u.role)}">
               ${escapeHtml((u.full_name||'?').charAt(0).toUpperCase())}
             </span>
           </td>
@@ -2304,7 +2304,7 @@ PAGES['team'] = async (el) => {
 
     setHTML('tm-staff', list.map(u => `
       <div class="pending-request" data-staff="${escapeHtml(u.username)}">
-        <span class="rail-avatar" style="width:32px;height:32px;font-size:12px;margin:0;background:${roleColor(u.role)}">
+        <span class="rail-avatar" style="width:36px;height:36px;background:${roleColor(u.role)}">
           ${escapeHtml((u.full_name||'?').charAt(0).toUpperCase())}
         </span>
         <div class="who">
@@ -2367,7 +2367,7 @@ PAGES['team'] = async (el) => {
     const unreadDot = m.is_read ? '' : '<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--danger);margin-right:6px;vertical-align:middle"></span>';
     return `
       <div class="pending-request" style="${m.is_read ? 'opacity:.85' : ''};border-left:${m.is_read ? '0' : '3px solid var(--danger)'}">
-        <span class="rail-avatar" style="width:32px;height:32px;font-size:12px;margin:0;background:${roleColor(m.from_role)}">
+        <span class="rail-avatar" style="width:36px;height:36px;background:${roleColor(m.from_role)}">
           ${escapeHtml((m.from_name||'?').charAt(0).toUpperCase())}
         </span>
         <div class="who" style="flex:1;min-width:0">
