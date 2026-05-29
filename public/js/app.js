@@ -1745,8 +1745,12 @@ PAGES['stock-ledger'] = async (el) => {
       $('inv-table').innerHTML = `<div class="empty">
         <div class="icon">${icon('package', 36, 'orange')}</div>
         <p>No items found</p>
-        ${isAdmin ? `<button class="btn btn-primary-accent btn-sm" onclick="document.getElementById('btn-add-item').click()">+ Add First Item</button>` : ''}
+        ${isAdmin ? `<button class="btn btn-primary-accent btn-sm" id="inv-empty-add-btn">${icon('plus',12)}<span>Add First Item</span></button>` : ''}
       </div>`;
+      if (isAdmin) {
+        const emptyBtn = $('inv-empty-add-btn');
+        if (emptyBtn) emptyBtn.onclick = () => openAddItemModal(reloadInventory);
+      }
       return;
     }
     $('inv-table').innerHTML = `<div class="table-wrap"><table>
@@ -1933,8 +1937,10 @@ async function loadFullQueue() {
     if (!data.length) {
       el.innerHTML = `<div class="card"><div class="empty">
         <div class="icon">${icon('ambulance', 36, 'red')}</div><p>No patients in queue</p>
-        <button class="btn btn-primary-accent btn-sm" onclick="showEnqueueModal(()=>navigate('triage-queue'))">+ Add First Patient</button>
+        <button class="btn btn-primary-accent btn-sm" id="tq-empty-add-btn">${icon('plus',12)}<span>Add First Patient</span></button>
       </div></div>`;
+      const emptyBtn = $('tq-empty-add-btn');
+      if (emptyBtn) emptyBtn.onclick = () => showEnqueueModal(loadFullQueue);
       return;
     }
     const labels = { 1:'Immediate', 2:'Emergent', 3:'Urgent', 4:'Semi-Urgent', 5:'Non-Urgent' };
@@ -2049,8 +2055,10 @@ async function loadRosterPage() {
     if (!data.length) {
       el.innerHTML = `<div class="card"><div class="empty">
         <div class="icon">${icon('users', 36, 'violet')}</div><p>No staff currently on duty</p>
-        <button class="btn btn-primary-accent btn-sm" onclick="showAddShiftModal(loadRosterPage)">+ Add First Shift</button>
+        <button class="btn btn-primary-accent btn-sm" id="sr-empty-add-btn">${icon('plus',12)}<span>Add First Shift</span></button>
       </div></div>`;
+      const emptyBtn = $('sr-empty-add-btn');
+      if (emptyBtn) emptyBtn.onclick = () => showAddShiftModal(loadRosterPage);
       return;
     }
     el.innerHTML = `<div class="card"><div class="table-wrap"><table>
