@@ -8,96 +8,150 @@
 </head>
 <body>
 
-<!-- ══════════════════════════════════════════════════════════════════ -->
-<!--  LOGIN SCREEN                                                       -->
-<!-- ══════════════════════════════════════════════════════════════════ -->
+<!-- ─── Auth screens (login | register | pending) ──────────────── -->
 <div id="login-screen">
-  <div class="login-card">
-    <div class="logo">🏥</div>
+
+  <!-- Sign-in card -->
+  <div class="login-card" id="auth-login">
+    <div class="login-logo">
+      <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21h18M3 7v14M21 7v14M6 21V11a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v10M9 6V3h6v3M12 10v6M9 13h6"/></svg>
+    </div>
     <h1>[ Website Name ]</h1>
-    <p>Hospital Management System — LAN Edition</p>
+    <p class="subtitle">Hospital Management System</p>
 
     <label for="username">Username</label>
-    <input id="username" type="text" placeholder="Enter username" autocomplete="off">
+    <input id="username" type="text" placeholder="e.g. nurse" autocomplete="off">
 
     <label for="password">Password</label>
-    <input id="password" type="password" placeholder="Enter password">
+    <input id="password" type="password" placeholder="••••••••">
 
     <button class="btn-primary" id="login-btn">Sign In</button>
     <div class="login-error" id="login-error"></div>
 
+    <div class="auth-toggle">
+      Don't have an account?
+      <button type="button" class="auth-link" id="show-register">Create one</button>
+    </div>
+
     <div class="demo-hint">
-      <strong>Demo Credentials</strong>
-      admin / admin123 &nbsp;·&nbsp; doctor / doctor123 &nbsp;·&nbsp; nurse / nurse123
+      <strong>Demo Accounts</strong>
+      <div class="creds">admin / admin123</div>
+      <div class="creds">doctor / doctor123</div>
+      <div class="creds">nurse / nurse123</div>
     </div>
   </div>
+
+  <!-- Register card -->
+  <div class="login-card auth-card-hidden" id="auth-register">
+    <div class="login-logo" style="background:#ecfdf9;color:#059669">
+      <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="8.5" cy="7" r="4"/><line x1="20" y1="8" x2="20" y2="14"/><line x1="23" y1="11" x2="17" y2="11"/></svg>
+    </div>
+    <h1>Create Account</h1>
+    <p class="subtitle">Request access — an administrator will review your request</p>
+
+    <label for="r-fullname">Full Name</label>
+    <input id="r-fullname" type="text" placeholder="Dr. Jane Doe" autocomplete="off">
+
+    <label for="r-username">Username</label>
+    <input id="r-username" type="text" placeholder="e.g. jdoe" autocomplete="off">
+
+    <label for="r-role">Requested Role</label>
+    <select id="r-role">
+      <option value="Doctor">Doctor</option>
+      <option value="Nurse">Nurse</option>
+      <option value="Administrator">Administrator</option>
+    </select>
+
+    <label for="r-password">Password</label>
+    <input id="r-password" type="password" placeholder="At least 12 characters">
+    <div class="pw-meter" id="r-meter" style="margin-bottom:14px">
+      <div class="pw-meter-bar"><div class="pw-meter-fill" id="r-meter-fill" style="width:0%"></div></div>
+      <div class="pw-meter-label" id="r-meter-label">At least 12 characters · mix upper, lower, digits, symbols</div>
+    </div>
+
+    <button class="btn-primary" id="register-btn">Submit Request</button>
+    <div class="login-error" id="register-error"></div>
+
+    <div class="auth-toggle">
+      Already have an account?
+      <button type="button" class="auth-link" id="show-login">Sign in</button>
+    </div>
+  </div>
+
+  <!-- Pending approval card -->
+  <div class="login-card auth-card-hidden" id="auth-pending">
+    <div class="login-logo" style="background:#fff4e6;color:#d97706">
+      <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+    </div>
+    <h1>Awaiting Approval</h1>
+    <p class="subtitle" id="pending-msg">
+      Your account is being reviewed by an administrator. Please check back later.
+    </p>
+    <button class="btn-primary" id="pending-back">Back to Sign In</button>
+  </div>
+
 </div>
 
-<!-- ══════════════════════════════════════════════════════════════════ -->
-<!--  APP SHELL                                                          -->
-<!-- ══════════════════════════════════════════════════════════════════ -->
+<!-- ─── App Shell ───────────────────────────────────────────── -->
 <div id="app">
 
-  <!-- [ Navigation Bar Component ] -->
   <nav class="navbar">
     <div class="navbar-brand">
-      <span class="icon">🏥</span>
-      [ Website Name ] — Hospital Management System
+      <span class="brand-mark">
+        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21h18M3 7v14M21 7v14M6 21V11a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v10M9 6V3h6v3M12 10v6M9 13h6"/></svg>
+      </span>
+      [ Website Name ]
     </div>
     <div class="navbar-right">
-      <span class="server-time" id="clock"></span>
-      <span class="user-badge" id="user-badge">—</span>
-      <button class="btn-logout" id="logout-btn">Sign Out</button>
+      <div class="global-search">
+        <input id="global-search-input" placeholder="Search patients…" type="text">
+        <span class="kbd">/</span>
+      </div>
+      <span class="clock" id="clock"></span>
+
+      <!-- Notification bell (Admin/Doctor only — toggled via JS) -->
+      <div class="notif-wrap" id="notif-wrap" style="display:none">
+        <button class="notif-btn" id="notif-btn" title="Notifications">
+          <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+          <span class="notif-badge" id="notif-badge" style="display:none">0</span>
+        </button>
+        <div class="notif-panel" id="notif-panel" style="display:none">
+          <div class="notif-head">
+            <strong>Notifications</strong>
+            <span class="dim" id="notif-summary">—</span>
+          </div>
+          <div id="notif-list"></div>
+        </div>
+      </div>
+
+      <!-- Privacy Screen toggle — visible to every signed-in role -->
+      <button class="privacy-btn" id="privacy-btn" title="Hide sensitive details" style="display:none">
+        <svg id="privacy-icon" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+      </button>
+
+      <div class="user-chip">
+        <span class="avatar" id="user-avatar">A</span>
+        <div class="meta">
+          <div class="name" id="user-name">—</div>
+          <div class="role" id="user-role">—</div>
+        </div>
+      </div>
+      <button class="btn-logout" id="logout-btn">Sign out</button>
     </div>
   </nav>
 
-  <!-- Sidebar navigation -->
-  <aside class="sidebar">
-    <div class="nav-section">Overview</div>
-    <div class="nav-item active" data-page="dashboard">
-      <span class="icon">📊</span> Dashboard
-    </div>
+  <aside class="sidebar" id="sidebar"></aside>
 
-    <div class="nav-section">[ Patient Intake & Records Module ]</div>
-    <div class="nav-item" data-page="patient-search">
-      <span class="icon">🔍</span> [ Patient Search View ]
-    </div>
-    <div class="nav-item" data-page="patient-register">
-      <span class="icon">➕</span> [ Patient Registration Form ]
-    </div>
-
-    <div class="nav-section">[ Inventory & Pharmacy Module ]</div>
-    <div class="nav-item" data-page="stock-ledger">
-      <span class="icon">📦</span> [ Stock Ledger View ]
-    </div>
-    <div class="nav-item" data-page="low-stock">
-      <span class="icon">⚠️</span> [ Low Inventory Alert Dashboard ]
-    </div>
-
-    <div class="nav-section">[ Clinical Queue & Scheduling Module ]</div>
-    <div class="nav-item" data-page="triage-queue">
-      <span class="icon">🚑</span> [ Triage Priority Queue ]
-    </div>
-    <div class="nav-item" data-page="staff-roster">
-      <span class="icon">👥</span> [ Staff Duty Roster ]
-    </div>
-
-    <div class="nav-section">[ Offline Documentation Module ]</div>
-    <div class="nav-item" data-page="doc-library">
-      <span class="icon">📚</span> [ Document Library Browser ]
-    </div>
-  </aside>
-
-  <!-- Main content area -->
   <main class="main" id="main-content"></main>
 </div>
 
-<!-- ══════════════════════════════════════════════════════════════════ -->
-<!--  MODAL (shared, content injected by JS)                            -->
-<!-- ══════════════════════════════════════════════════════════════════ -->
+<!-- ─── Toast host ──────────────────────────────────────────── -->
+<div id="toast-host"></div>
+
+<!-- ─── Shared Modal ────────────────────────────────────────── -->
 <div class="modal-overlay" id="modal-overlay">
   <div class="modal">
-    <div class="modal-header">
+    <div class="modal-head">
       <h3 id="modal-title">—</h3>
       <button class="modal-close" id="modal-close">✕</button>
     </div>

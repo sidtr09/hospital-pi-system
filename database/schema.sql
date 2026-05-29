@@ -113,3 +113,70 @@ CREATE TABLE IF NOT EXISTS documents (
 
 CREATE INDEX IF NOT EXISTS idx_documents_category ON documents(category);
 CREATE INDEX IF NOT EXISTS idx_documents_title    ON documents(title);
+
+-- ── User Accounts (self-signup with admin approval) ──────────────────────────
+
+CREATE TABLE IF NOT EXISTS users (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    username        TEXT    NOT NULL UNIQUE,
+    password_hash   TEXT    NOT NULL,         -- scrypt: "salt:hash" hex
+    full_name       TEXT    NOT NULL,
+    role            TEXT    NOT NULL CHECK(role IN ('Administrator','Doctor','Nurse')),
+    status          TEXT    NOT NULL DEFAULT 'pending'
+                        CHECK(status IN ('pending','approved','rejected')),
+    requested_at    TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')),
+    decided_at      TEXT,
+    decided_by      TEXT
+);
+
+CREATE INDEX IF NOT EXISTS idx_users_username ON users(username);
+CREATE INDEX IF NOT EXISTS idx_users_status   ON users(status);
+
+-- ── Staff Messages & Requests (team chatter) ─────────────────────────────────
+
+CREATE TABLE IF NOT EXISTS messages (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    from_username   TEXT    NOT NULL,
+    from_name       TEXT    NOT NULL,
+    from_role       TEXT,
+    to_username     TEXT    NOT NULL,
+    kind            TEXT    NOT NULL DEFAULT 'message'
+                        CHECK(kind IN ('message','request')),
+    body            TEXT    NOT NULL,
+    is_read         INTEGER NOT NULL DEFAULT 0 CHECK(is_read IN (0,1)),
+    created_at      TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_messages_to_unread ON messages(to_username, is_read);
+CREATE INDEX IF NOT EXISTS idx_messages_from      ON messages(from_username);
+CREATE INDEX IF NOT EXISTS idx_messages_created   ON messages(created_at);
+
+-- ── Audit Log — every security-relevant event for accountability ───────────
+
+CREATE TABLE IF NOT EXISTS audit_log (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    occurred_at     TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')),
+    actor_username  TEXT,                       -- NULL on failed-login before session
+    actor_name      TEXT,
+    actor_role      TEXT,
+    action          TEXT NOT NULL,              -- login.ok|login.fail|patient.view|
+                                                -- patient.create|patient.update|patient.delete|
+                                                -- audit.export
+    target_kind     TEXT,                       -- 'patient'|'user'|NULL
+    target_id       TEXT,                       -- patient_ref / username / etc
+    detail          TEXT,                       -- short JSON for changed fields
+    ip              TEXT,
+    user_agent      TEXT
+);
+
+CREATE INDEX IF NOT EXISTS idx_audit_occurred ON audit_log(occurred_at DESC);
+CREATE INDEX IF NOT EXISTS idx_audit_actor    ON audit_log(actor_username);
+CREATE INDEX IF NOT EXISTS idx_audit_action   ON audit_log(action);
+
+-- ── System Settings (key/value store for disaster mode etc) ────────────────
+
+CREATE TABLE IF NOT EXISTS app_settings (
+    key         TEXT PRIMARY KEY,
+    value       TEXT,
+    updated_at  TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now'))
+);

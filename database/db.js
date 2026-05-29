@@ -27,11 +27,45 @@ function applyPragmas(db, pragmas) {
   });
 }
 
-function loadSchema(db) {
+// Additive column migrations. SQLite doesn't support ADD COLUMN IF NOT EXISTS,
+// so each is attempted individually and "duplicate column" errors swallowed.
+const MIGRATIONS = [
+  // Phase C: WHO triage form fields
+  "ALTER TABLE queue_entries ADD COLUMN vitals_temp_f      REAL",
+  "ALTER TABLE queue_entries ADD COLUMN vitals_hr_bpm      INTEGER",
+  "ALTER TABLE queue_entries ADD COLUMN vitals_bp          TEXT",
+  "ALTER TABLE queue_entries ADD COLUMN vitals_spo2_pct    INTEGER",
+  "ALTER TABLE queue_entries ADD COLUMN vitals_rr          INTEGER",
+  "ALTER TABLE queue_entries ADD COLUMN emergency_flags    TEXT",
+  "ALTER TABLE queue_entries ADD COLUMN symptoms           TEXT",
+  "ALTER TABLE queue_entries ADD COLUMN duration           TEXT",
+  "ALTER TABLE queue_entries ADD COLUMN drug_allergies     TEXT",
+  "ALTER TABLE queue_entries ADD COLUMN current_meds       TEXT",
+  "ALTER TABLE queue_entries ADD COLUMN medical_history    TEXT",
+  "ALTER TABLE queue_entries ADD COLUMN triage_color       TEXT",
+];
+
+function runOne(db, sql) {
+  return new Promise((resolve) => {
+    db.run(sql, (err) => {
+      if (!err) return resolve();
+      const m = String(err.message || '').toLowerCase();
+      if (m.includes('duplicate column')) return resolve();
+      console.warn('[DB] migration warn:', err.message);
+      resolve();
+    });
+  });
+}
+
+async function loadSchema(db) {
   const schemaPath = path.join(__dirname, 'schema.sql');
-  if (!fs.existsSync(schemaPath)) return Promise.resolve();
-  const sql = fs.readFileSync(schemaPath, 'utf8');
-  return new Promise((res, rej) => db.exec(sql, err => err ? rej(err) : res()));
+  if (fs.existsSync(schemaPath)) {
+    const sql = fs.readFileSync(schemaPath, 'utf8');
+    await new Promise((res, rej) => db.exec(sql, err => err ? rej(err) : res()));
+  }
+  for (const sql of MIGRATIONS) {
+    await runOne(db, sql);
+  }
 }
 
 const db = {
