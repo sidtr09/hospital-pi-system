@@ -416,6 +416,7 @@ const ROLE_CONFIG = {
       { page: 'team',             icon: 'users',     tone: 'violet', label: 'Team' },
       { section: 'Administration' },
       { page: 'staff-accounts',   icon: 'shieldCheck', tone: 'teal',  label: 'Staff Accounts' },
+      { page: 'audit-log',        icon: 'fileText',    tone: 'gray',  label: 'Audit Log' },
       { section: 'Account' },
       { page: 'settings',         icon: 'settings',  tone: 'gray',   label: 'Settings' },
     ],
@@ -2537,6 +2538,96 @@ function openComposeModal(toUsername, toName, kindDefault = 'message') {
     }
   };
 }
+
+/* ════════════════════════════════════════════════════════════════
+   AUDIT LOG (Admin only)
+════════════════════════════════════════════════════════════════ */
+const AUDIT_ACTION_TONES = {
+  'login.ok':       'green',
+  'login.fail':     'red',
+  'patient.view':   'gray',
+  'patient.create': 'teal',
+  'patient.update': 'blue',
+  'patient.delete': 'red',
+  'audit.export':   'orange',
+};
+
+PAGES['audit-log'] = async (el) => {
+  el.innerHTML = `
+    <div class="page-header">
+      <div><h1>Audit Log</h1><p>Every security-relevant event on the system</p></div>
+      <div class="page-actions">
+        <button class="btn btn-secondary btn-sm" id="al-refresh-btn">${icon('refresh',14)}<span>Refresh</span></button>
+        <button class="btn btn-primary-accent" id="al-export-btn">${icon('fileText',14)}<span>Export CSV</span></button>
+      </div>
+    </div>
+    <div class="card">
+      <div class="filter-row">
+        <div class="filter-input" style="flex:1"><input id="al-actor" placeholder="Filter by username…"></div>
+        <select id="al-action" style="height:36px;padding:0 12px;border:1px solid var(--border-2);border-radius:var(--r-sm);outline:none;background:var(--surface);font-size:13px">
+          <option value="">All actions</option>
+          <option value="login.ok">login.ok</option>
+          <option value="login.fail">login.fail</option>
+          <option value="patient.view">patient.view</option>
+          <option value="patient.create">patient.create</option>
+          <option value="patient.update">patient.update</option>
+          <option value="patient.delete">patient.delete</option>
+          <option value="audit.export">audit.export</option>
+        </select>
+        <input id="al-since" type="date" style="height:36px;padding:0 12px;border:1px solid var(--border-2);border-radius:var(--r-sm);outline:none;background:var(--surface);font-size:13px">
+      </div>
+      <div id="al-table">${skelRows(8)}</div>
+    </div>`;
+
+  const load = async () => {
+    const params = new URLSearchParams();
+    if ($('al-actor').value.trim())  params.set('actor',  $('al-actor').value.trim());
+    if ($('al-action').value)         params.set('action', $('al-action').value);
+    if ($('al-since').value)          params.set('since',  $('al-since').value);
+    params.set('limit', '200');
+    try {
+      const { data } = await api('GET', `/audit?${params.toString()}`);
+      if (!data.length) {
+        setHTML('al-table', `<div class="empty"><div class="icon">${icon('fileText',36,'gray')}</div><p>No events match this filter</p></div>`);
+        return;
+      }
+      setHTML('al-table', `<div class="table-wrap"><table>
+        <thead><tr><th>When</th><th>Actor</th><th>Action</th><th>Target</th><th>Detail</th><th>IP</th></tr></thead>
+        <tbody>${data.map(r => {
+          const tone = AUDIT_ACTION_TONES[r.action] || 'gray';
+          const detail = r.detail ? (() => { try { return JSON.stringify(JSON.parse(r.detail)).slice(0,90); } catch { return r.detail.slice(0,90); } })() : '';
+          return `<tr>
+            <td class="text-mut" style="white-space:nowrap;font-size:12px">${fmt(r.occurred_at)}</td>
+            <td>${r.actor_username
+                ? `<strong>${escapeHtml(r.actor_name||r.actor_username)}</strong> <span class="dim">@${escapeHtml(r.actor_username)}</span>`
+                : '<span class="dim">anonymous</span>'}</td>
+            <td>${badge(r.action, tone)}</td>
+            <td><span class="mono" style="font-size:12px">${escapeHtml(r.target_id||'—')}</span></td>
+            <td class="text-mut ellipsis" style="max-width:260px;font-family:ui-monospace,monospace;font-size:11px">${escapeHtml(detail)}</td>
+            <td class="text-mut" style="font-size:11px">${escapeHtml(r.ip||'—')}</td>
+          </tr>`;
+        }).join('')}</tbody>
+      </table></div>`);
+    } catch (e) { setHTML('al-table', `<div class="alert alert-error">${escapeHtml(e.message)}</div>`); }
+  };
+
+  $('al-actor').oninput      = debounce(load, 250);
+  $('al-action').onchange    = load;
+  $('al-since').onchange     = load;
+  $('al-refresh-btn').onclick = load;
+  $('al-export-btn').onclick  = () => {
+    // Download via a hidden link so the browser handles the file save and
+    // the cookie auth is sent automatically. Server logs audit.export.
+    const params = new URLSearchParams();
+    if ($('al-since').value) params.set('since', $('al-since').value);
+    const a = document.createElement('a');
+    a.href = '/api/audit/export' + (params.toString() ? '?'+params.toString() : '');
+    a.download = '';
+    document.body.appendChild(a); a.click(); a.remove();
+    toast('Export started', 'info');
+  };
+  load();
+};
 
 /* ════════════════════════════════════════════════════════════════
    SETTINGS — change password (all roles)

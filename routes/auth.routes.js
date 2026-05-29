@@ -4,6 +4,7 @@ const express = require('express');
 const crypto  = require('node:crypto');
 const bcrypt  = require('bcryptjs');
 const db      = require('../database/db');
+const { logEvent } = require('./audit');
 
 const PASSWORD_MIN_LENGTH = 12;
 
@@ -95,12 +96,14 @@ router.post('/login', async (req, res, next) => {
         });
       }
       if (!verifyPassword(password, dbUser.password_hash)) {
+        await logEvent(req, 'login.fail', { target_kind: 'user', target_id: username, detail: { reason: 'bad-password' } });
         return res.status(401).json({ error: 'Invalid username or password' });
       }
       req.session.userId       = dbUser.id;
       req.session.userUsername = dbUser.username;
       req.session.userName     = dbUser.full_name;
       req.session.userRole     = dbUser.role;
+      await logEvent(req, 'login.ok', { target_kind: 'user', target_id: dbUser.username });
       return res.json({ ok: true, name: dbUser.full_name, role: dbUser.role });
     }
 
@@ -109,15 +112,18 @@ router.post('/login', async (req, res, next) => {
     const demo = DEMO_USERS.find(u => u.username === username);
     if (demo) {
       if (demo.password !== password) {
+        await logEvent(req, 'login.fail', { target_kind: 'user', target_id: username, detail: { reason: 'bad-password' } });
         return res.status(401).json({ error: 'Invalid username or password' });
       }
       req.session.userId       = demo.id;
       req.session.userUsername = demo.username;
       req.session.userName     = demo.name;
       req.session.userRole     = demo.role;
+      await logEvent(req, 'login.ok', { target_kind: 'user', target_id: demo.username, detail: { demo: true } });
       return res.json({ ok: true, name: demo.name, role: demo.role });
     }
 
+    await logEvent(req, 'login.fail', { target_kind: 'user', target_id: username, detail: { reason: 'no-such-user' } });
     return res.status(401).json({ error: 'Invalid username or password' });
   } catch (err) { next(err); }
 });
