@@ -814,6 +814,15 @@ tbody tr.tri td { background: transparent; }
   box-shadow: var(--shadow-lg);
   max-height: 90vh; overflow-y: auto;
 }
+.modal.wide { width: 720px; }
+.modal details { border: 1px solid var(--border-2); border-radius: var(--r-sm); padding: 4px 12px; margin-bottom: 8px; background: var(--surface); }
+.modal details > summary { list-style: none; }
+.modal details > summary::-webkit-details-marker { display: none; }
+.modal details > summary::before {
+  content: '▸'; display: inline-block; margin-right: 6px;
+  color: var(--text-faint); transition: transform .12s ease;
+}
+.modal details[open] > summary::before { transform: rotate(90deg); }
 .modal-head {
   padding: var(--s-4) var(--s-5);
   border-bottom: 1px solid var(--border-2);

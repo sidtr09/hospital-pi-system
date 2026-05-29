@@ -18,8 +18,9 @@ router.get('/', async (req, res, next) => {
   try {
     const { status = 'waiting' } = req.query;
     const rows = await db.all(
-      `SELECT q.id, q.triage_level, q.chief_complaint, q.assigned_to, q.status,
-              q.queued_at, p.full_name, p.patient_ref, p.blood_group
+      `SELECT q.id, q.triage_level, q.triage_color, q.chief_complaint,
+              q.assigned_to, q.status, q.queued_at,
+              p.full_name, p.patient_ref, p.blood_group
        FROM queue_entries q
        JOIN patients p ON p.id = q.patient_id
        WHERE q.status = ?
@@ -30,19 +31,68 @@ router.get('/', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
-// POST /api/queue — enqueue a patient
+// WHO triage rule:
+//   any red flag → red; else any yellow flag → yellow; else green.
+// Inputs: emergency_flags{ q1..q10 booleans } and vitals.
+function computeTriageColor(emergency_flags = {}, vitals = {}) {
+  const ef = emergency_flags || {};
+  // RED — life-threatening NOW (Qs 1, 2, 3, 4, 5, 6)
+  if (ef.unconscious || ef.no_breathing || ef.severe_bleeding ||
+      ef.chest_pain || ef.seizure || ef.shock) return 'red';
+  // RED via vitals — extreme hypoxia or no pulse
+  if (vitals.vitals_spo2_pct != null && Number(vitals.vitals_spo2_pct) < 88) return 'red';
+  if (vitals.vitals_hr_bpm   != null && (Number(vitals.vitals_hr_bpm) > 150 || Number(vitals.vitals_hr_bpm) < 40)) return 'red';
+  // YELLOW — urgent (Qs 7, 8, 9)
+  if (ef.dehydrated || ef.high_fever || ef.severe_pain) return 'yellow';
+  // YELLOW via vitals — moderate distress
+  if (vitals.vitals_temp_f   != null && Number(vitals.vitals_temp_f) >= 103) return 'yellow';
+  if (vitals.vitals_spo2_pct != null && Number(vitals.vitals_spo2_pct) < 94) return 'yellow';
+  return 'green';
+}
+
+const COLOR_TO_LEVEL = { red: 1, yellow: 3, green: 4, black: 5 };
+
+// POST /api/queue — enqueue a patient (WHO triage form aware)
 router.post('/', async (req, res, next) => {
   try {
-    const { patient_id, triage_level, chief_complaint, assigned_to } = req.body;
-    if (!patient_id || !triage_level || !chief_complaint) {
-      return res.status(400).json({ error: '[ Required: patient_id, triage_level, chief_complaint ]' });
+    const {
+      patient_id, triage_level, chief_complaint, assigned_to,
+      // WHO extensions (all optional — the legacy 3-field intake still works)
+      triage_color: explicit_color,
+      vitals_temp_f, vitals_hr_bpm, vitals_bp, vitals_spo2_pct, vitals_rr,
+      emergency_flags, symptoms, duration,
+      drug_allergies, current_meds, medical_history,
+    } = req.body;
+
+    if (!patient_id || !chief_complaint) {
+      return res.status(400).json({ error: '[ Required: patient_id, chief_complaint ]' });
     }
+
+    const vitals = { vitals_temp_f, vitals_hr_bpm, vitals_spo2_pct };
+    const color = explicit_color
+      || computeTriageColor(emergency_flags, vitals);
+    const level = triage_level || COLOR_TO_LEVEL[color] || 3;
+
     const result = await db.run(
-      `INSERT INTO queue_entries (patient_id, triage_level, chief_complaint, assigned_to)
-       VALUES (?,?,?,?)`,
-      [patient_id, triage_level, chief_complaint, assigned_to]
+      `INSERT INTO queue_entries
+         (patient_id, triage_level, chief_complaint, assigned_to,
+          triage_color,
+          vitals_temp_f, vitals_hr_bpm, vitals_bp, vitals_spo2_pct, vitals_rr,
+          emergency_flags, symptoms, duration,
+          drug_allergies, current_meds, medical_history)
+       VALUES (?,?,?,?, ?, ?,?,?,?,?, ?,?,?, ?,?,?)`,
+      [
+        patient_id, level, chief_complaint, assigned_to,
+        color,
+        vitals_temp_f ?? null, vitals_hr_bpm ?? null, vitals_bp ?? null,
+        vitals_spo2_pct ?? null, vitals_rr ?? null,
+        emergency_flags ? JSON.stringify(emergency_flags) : null,
+        symptoms ?? null, duration ?? null,
+        drug_allergies ?? null, current_meds ?? null,
+        Array.isArray(medical_history) ? medical_history.join(',') : (medical_history ?? null),
+      ]
     );
-    res.status(201).json({ id: result.lastInsertRowid });
+    res.status(201).json({ id: result.lastInsertRowid, triage_color: color, triage_level: level });
   } catch (err) { next(err); }
 });
 

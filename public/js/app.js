@@ -491,7 +491,10 @@ function openModal(title, html) {
   $('modal-body').innerHTML = html;
   $('modal-overlay').classList.add('open');
 }
-function closeModal() { $('modal-overlay').classList.remove('open'); }
+function closeModal() {
+  $('modal-overlay').classList.remove('open');
+  document.querySelector('.modal')?.classList.remove('wide');
+}
 $('modal-close').onclick = closeModal;
 $('modal-overlay').onclick = e => { if (e.target === $('modal-overlay')) closeModal(); };
 document.addEventListener('keydown', e => {
@@ -2072,48 +2075,234 @@ window.resolveQueue = async (id) => {
   } catch(e) { toast(e.message, 'error'); }
 };
 
+// WHO-style triage form. Same client-side colour rule the server uses, so
+// the live banner updates as the user ticks emergency questions.
+const WHO_EMERGENCY = [
+  { key: 'unconscious',     label: 'Is the patient unconscious?',                  tier: 'red'    },
+  { key: 'no_breathing',    label: 'Is the patient having difficulty breathing?', tier: 'red'    },
+  { key: 'severe_bleeding', label: 'Is the patient experiencing severe bleeding?',tier: 'red'    },
+  { key: 'chest_pain',      label: 'Is the patient having chest pain?',           tier: 'red'    },
+  { key: 'seizure',         label: 'Is the patient having a seizure or convulsion?', tier: 'red' },
+  { key: 'shock',           label: 'Is the patient showing signs of shock?',      tier: 'red'    },
+  { key: 'dehydrated',      label: 'Is the patient severely dehydrated?',         tier: 'yellow' },
+  { key: 'high_fever',      label: 'Does the patient have a high fever?',         tier: 'yellow' },
+  { key: 'severe_pain',     label: 'Is the patient experiencing severe pain?',    tier: 'yellow' },
+  { key: 'pregnant',        label: 'Is the patient pregnant?',                    tier: 'yellow' },
+];
+
+function computeColorClient(flags, vitals) {
+  const ef = flags || {};
+  for (const q of WHO_EMERGENCY) {
+    if (ef[q.key] && q.tier === 'red') return { color: 'red', reason: `${q.label.replace(/\?$/, '')}` };
+  }
+  if (vitals.vitals_spo2_pct != null && +vitals.vitals_spo2_pct && +vitals.vitals_spo2_pct < 88)
+    return { color: 'red', reason: 'SpO₂ < 88%' };
+  if (vitals.vitals_hr_bpm   != null && +vitals.vitals_hr_bpm && (+vitals.vitals_hr_bpm > 150 || +vitals.vitals_hr_bpm < 40))
+    return { color: 'red', reason: 'Heart rate outside 40–150 BPM' };
+  for (const q of WHO_EMERGENCY) {
+    if (ef[q.key] && q.tier === 'yellow') return { color: 'yellow', reason: q.label.replace(/\?$/, '') };
+  }
+  if (vitals.vitals_temp_f != null && +vitals.vitals_temp_f && +vitals.vitals_temp_f >= 103)
+    return { color: 'yellow', reason: 'Temperature ≥ 103 °F' };
+  if (vitals.vitals_spo2_pct != null && +vitals.vitals_spo2_pct && +vitals.vitals_spo2_pct < 94)
+    return { color: 'yellow', reason: 'SpO₂ < 94%' };
+  return { color: 'green', reason: 'No emergency criteria triggered' };
+}
+
+const TRIAGE_COLOR_HEX = {
+  red:    { bg: '#fef2f2', border: '#dc2626', text: '#991b1b' },
+  yellow: { bg: '#fffbeb', border: '#d97706', text: '#92400e' },
+  green:  { bg: '#f0fdf4', border: '#059669', text: '#065f46' },
+  black:  { bg: '#1f2937', border: '#000',    text: '#fff'    },
+};
+
 window.showEnqueueModal = (onSuccess) => {
-  openModal('Add to [ Triage Queue ]', `
-    <div class="form-grid">
-      <div class="form-group full"><label>Patient Reference <span class="req">*</span></label>
-        <input id="eq-ref" placeholder="e.g. PAT-2024-001">
+  const meds = [
+    { key: 'diabetes',     label: 'Diabetes' },
+    { key: 'hypertension', label: 'Hypertension' },
+    { key: 'heart',        label: 'Heart disease' },
+    { key: 'asthma',       label: 'Asthma' },
+  ];
+  openModal('Patient Triage Form (WHO)', `
+    <details open style="margin-bottom:8px"><summary style="cursor:pointer;font-weight:700;padding:8px 0">${icon('user',14,'blue')} 1. Patient</summary>
+      <div class="form-grid" style="margin-top:8px">
+        <div class="form-group full"><label>Patient Reference <span class="req">*</span></label>
+          <input id="eq-ref" placeholder="e.g. PAT-2024-001">
+        </div>
+        <div class="form-group"><label>Assign to</label>
+          <input id="eq-assign" placeholder="Doctor / Nurse name" value="${currentRole==='Doctor' ? escapeHtml(currentUser||'') : ''}">
+        </div>
+        <div class="form-group"><label>&nbsp;</label>
+          <div id="eq-found" class="dim" style="font-size:12px;padding-top:8px">Enter a reference and tab away to look up</div>
+        </div>
       </div>
-      <div class="form-group"><label>Triage Level <span class="req">*</span></label>
-        <select id="eq-level">
-          <option value="1">T1 — Immediate</option>
-          <option value="2">T2 — Emergent</option>
-          <option value="3" selected>T3 — Urgent</option>
-          <option value="4">T4 — Semi-Urgent</option>
-          <option value="5">T5 — Non-Urgent</option>
-        </select>
+    </details>
+
+    <details open><summary style="cursor:pointer;font-weight:700;padding:8px 0">${icon('activity',14,'orange')} 2. Vital Signs</summary>
+      <div class="form-grid" style="grid-template-columns:1fr 1fr 1fr;margin-top:8px">
+        <div class="form-group"><label>Temperature (°F)</label><input id="eq-t" type="number" step="0.1" placeholder="98.6"></div>
+        <div class="form-group"><label>Heart Rate (BPM)</label><input id="eq-hr" type="number" placeholder="80"></div>
+        <div class="form-group"><label>Blood Pressure</label><input id="eq-bp" placeholder="120/80"></div>
+        <div class="form-group"><label>Oxygen Sat (%)</label><input id="eq-spo2" type="number" placeholder="98"></div>
+        <div class="form-group"><label>Respiratory Rate</label><input id="eq-rr" type="number" placeholder="16"></div>
       </div>
-      <div class="form-group"><label>Assign to</label>
-        <input id="eq-assign" placeholder="Doctor / Nurse name" value="${currentRole==='Doctor' ? escapeHtml(currentUser||'') : ''}">
+    </details>
+
+    <details><summary style="cursor:pointer;font-weight:700;padding:8px 0">${icon('alert',14,'red')} 3. Emergency Assessment</summary>
+      <div style="margin-top:8px">
+        ${WHO_EMERGENCY.map(q => `
+          <label style="display:flex;align-items:center;justify-content:space-between;padding:8px 12px;border-bottom:1px solid var(--border-2)">
+            <span style="font-size:13px">${escapeHtml(q.label)}</span>
+            <span style="display:flex;gap:14px">
+              <label style="display:flex;align-items:center;gap:4px;font-size:12px"><input type="radio" name="eq-q-${q.key}" value="1"> Yes</label>
+              <label style="display:flex;align-items:center;gap:4px;font-size:12px"><input type="radio" name="eq-q-${q.key}" value="0" checked> No</label>
+            </span>
+          </label>`).join('')}
       </div>
-      <div class="form-group full"><label>Chief Complaint <span class="req">*</span></label>
-        <textarea id="eq-complaint" rows="2" placeholder="Presenting complaint…"></textarea>
+    </details>
+
+    <details><summary style="cursor:pointer;font-weight:700;padding:8px 0">${icon('fileText',14,'blue')} 4. Symptoms</summary>
+      <div class="form-grid" style="margin-top:8px">
+        <div class="form-group full"><label>Chief Complaint <span class="req">*</span></label>
+          <textarea id="eq-complaint" rows="2" placeholder="What brings them in?"></textarea>
+        </div>
+        <div class="form-group full"><label>Symptoms Description</label>
+          <textarea id="eq-symptoms" rows="2" placeholder="Onset, severity, location…"></textarea>
+        </div>
+        <div class="form-group full"><label>Duration of Symptoms</label>
+          <input id="eq-duration" placeholder="e.g. 2 days">
+        </div>
       </div>
+    </details>
+
+    <details><summary style="cursor:pointer;font-weight:700;padding:8px 0">${icon('pill',14,'violet')} 5. Allergies & Medications</summary>
+      <div class="form-grid" style="margin-top:8px">
+        <div class="form-group full"><label>Drug Allergies</label>
+          <input id="eq-drug" placeholder="e.g. Penicillin, sulfa">
+        </div>
+        <div class="form-group full"><label>Current Medications</label>
+          <textarea id="eq-meds" rows="2" placeholder="Active prescriptions, OTC, herbal"></textarea>
+        </div>
+      </div>
+    </details>
+
+    <details><summary style="cursor:pointer;font-weight:700;padding:8px 0">${icon('shield',14,'teal')} 6. Medical History</summary>
+      <div style="margin-top:8px;display:flex;flex-wrap:wrap;gap:14px;padding:0 12px">
+        ${meds.map(m => `<label style="display:flex;align-items:center;gap:6px;font-size:13px"><input type="checkbox" name="eq-h-${m.key}"> ${escapeHtml(m.label)}</label>`).join('')}
+      </div>
+      <div class="form-group full" style="margin-top:12px">
+        <label>Other Conditions</label>
+        <textarea id="eq-hist" rows="2" placeholder="Other diagnoses, recent surgeries…"></textarea>
+      </div>
+    </details>
+
+    <div id="eq-banner" style="margin:16px 0 0;padding:14px 16px;border-radius:8px;border-left:5px solid var(--border-2);background:var(--surface-2)">
+      <div style="font-size:11px;font-weight:700;color:var(--text-mut);text-transform:uppercase;letter-spacing:.5px">Computed Triage</div>
+      <div style="font-size:18px;font-weight:700;margin-top:4px" id="eq-banner-label">—</div>
+      <div style="font-size:12px;color:var(--text-mut);margin-top:2px" id="eq-banner-reason">Answer the assessment to compute</div>
     </div>
+
     <div class="form-actions">
       <button class="btn btn-ghost" onclick="closeModal()">Cancel</button>
-      <button class="btn btn-primary-accent" id="eq-save">Add</button>
+      <button class="btn btn-primary-accent" id="eq-save">${icon('check',12)}<span>Add to Triage</span></button>
     </div>`);
+
+  document.querySelector('.modal')?.classList.add('wide');
+
+  // ── Patient lookup ──
+  let foundPatient = null;
+  const lookup = debounce(async () => {
+    const ref = $('eq-ref').value.trim();
+    if (!ref) { foundPatient = null; setHTML('eq-found', '<span class="dim" style="font-size:12px">Enter a reference and tab away to look up</span>'); return; }
+    try {
+      const { data } = await api('GET', `/patients?q=${encodeURIComponent(ref)}&limit=1`);
+      if (!data.length) { foundPatient = null; setHTML('eq-found', '<span class="alert alert-error" style="margin:0;padding:6px 10px;font-size:12px">Not found</span>'); return; }
+      foundPatient = data[0];
+      setHTML('eq-found', `<span style="font-size:12px;color:var(--success)">✓ ${escapeHtml(data[0].full_name)} (DOB ${escapeHtml(data[0].date_of_birth)})</span>`);
+    } catch (e) { setHTML('eq-found', `<span class="alert alert-error" style="margin:0;padding:6px 10px;font-size:12px">${escapeHtml(e.message)}</span>`); }
+  }, 250);
+  $('eq-ref').oninput = lookup;
+
+  // ── Live triage colour banner ──
+  const refreshBanner = () => {
+    const flags = {};
+    for (const q of WHO_EMERGENCY) {
+      const checked = document.querySelector(`input[name="eq-q-${q.key}"]:checked`);
+      flags[q.key] = checked && checked.value === '1';
+    }
+    const vitals = {
+      vitals_temp_f:   $('eq-t').value,
+      vitals_hr_bpm:   $('eq-hr').value,
+      vitals_spo2_pct: $('eq-spo2').value,
+    };
+    const { color, reason } = computeColorClient(flags, vitals);
+    const c = TRIAGE_COLOR_HEX[color];
+    const banner = $('eq-banner');
+    banner.style.background    = c.bg;
+    banner.style.borderColor   = c.border;
+    banner.style.borderLeftColor = c.border;
+    $('eq-banner-label').textContent  = `${color.toUpperCase()} — ${color==='red'?'Immediate':color==='yellow'?'Urgent':'Stable'}`;
+    $('eq-banner-label').style.color  = c.text;
+    $('eq-banner-reason').textContent = reason;
+  };
+  refreshBanner();
+  ['eq-t','eq-hr','eq-spo2'].forEach(id => { $(id).oninput = refreshBanner; });
+  WHO_EMERGENCY.forEach(q => {
+    document.querySelectorAll(`input[name="eq-q-${q.key}"]`).forEach(r => r.onchange = refreshBanner);
+  });
+
+  // ── Submit ──
   $('eq-save').onclick = async () => {
     const ref = $('eq-ref').value.trim();
     if (!ref) { toast('Enter a patient reference', 'warning'); return; }
+    if (!foundPatient || foundPatient.patient_ref !== ref) {
+      // Try once more in case the user didn't tab out
+      try {
+        const { data } = await api('GET', `/patients?q=${encodeURIComponent(ref)}&limit=1`);
+        if (!data.length) { toast('No patient with that reference', 'warning'); return; }
+        foundPatient = data[0];
+      } catch(e) { toast(e.message, 'error'); return; }
+    }
+    const complaint = $('eq-complaint').value.trim();
+    if (!complaint) { toast('Chief complaint is required', 'warning'); return; }
+
+    const emergency_flags = {};
+    for (const q of WHO_EMERGENCY) {
+      const r = document.querySelector(`input[name="eq-q-${q.key}"]:checked`);
+      emergency_flags[q.key] = r && r.value === '1';
+    }
+    const history = [];
+    document.querySelectorAll('input[name^="eq-h-"]:checked').forEach(c => history.push(c.name.replace('eq-h-','')));
+
+    const btn = $('eq-save');
+    btn.disabled = true;
+    btn.innerHTML = 'Adding…';
     try {
-      const { data } = await api('GET', `/patients?q=${encodeURIComponent(ref)}&limit=1`);
-      if (!data.length) { toast('No patient with that reference', 'warning'); return; }
       await api('POST', '/queue', {
-        patient_id:      data[0].id,
-        triage_level:    +$('eq-level').value,
-        chief_complaint: $('eq-complaint').value,
-        assigned_to:     $('eq-assign').value || null,
+        patient_id:       foundPatient.id,
+        chief_complaint:  complaint,
+        assigned_to:      $('eq-assign').value || null,
+        vitals_temp_f:    $('eq-t').value     || null,
+        vitals_hr_bpm:    $('eq-hr').value    || null,
+        vitals_bp:        $('eq-bp').value    || null,
+        vitals_spo2_pct:  $('eq-spo2').value  || null,
+        vitals_rr:        $('eq-rr').value    || null,
+        emergency_flags,
+        symptoms:         $('eq-symptoms').value || null,
+        duration:         $('eq-duration').value || null,
+        drug_allergies:   $('eq-drug').value     || null,
+        current_meds:     $('eq-meds').value     || null,
+        medical_history:  history.concat([$('eq-hist').value].filter(Boolean)).join(','),
       });
-      toast('Added to queue', 'success');
+      toast('Patient triaged and added', 'success');
       closeModal();
       if (onSuccess) onSuccess();
-    } catch(e) { toast(e.message, 'error'); }
+      refreshNotifications();
+    } catch(e) {
+      toast(e.message, 'error');
+      btn.disabled = false;
+      btn.innerHTML = `${icon('check',12)}<span>Add to Triage</span>`;
+    }
   };
 };
 
