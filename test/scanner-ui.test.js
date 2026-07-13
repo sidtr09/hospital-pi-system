@@ -86,9 +86,7 @@ test('scanner page is offline, format-restricted and uses one backend trust path
   assert.match(scannerSource, /currentPageCleanup/);
   assert.match(scannerSource, /cameraRequestVersion/);
   assert.match(scannerSource, /stopMediaStream/);
-  assert.match(scannerSource, /URL\.createObjectURL/);
-  assert.match(scannerSource, /URL\.revokeObjectURL/);
-  assert.doesNotMatch(scannerSource, /FormData|\/upload|console\./);
+  assert.doesNotMatch(scannerSource, /scan-photo-input|decodeFromImageUrl|FormData|\/upload|console\./);
   assert.doesNotMatch(scannerSource, /https?:\/\//);
 
   assert.match(indexHtml, /src="\/vendor\/zxing-browser\.min\.js\?v=0\.1\.5"/);

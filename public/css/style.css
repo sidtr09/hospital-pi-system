@@ -1271,13 +1271,6 @@ input[type="time"]:focus {
 .scanner-camera-select-wrap.single-camera { opacity: .7; }
 .scanner-button-row { display: flex; gap: 8px; }
 .scanner-secure-warning { margin-bottom: 14px; }
-.scanner-photo-fallback {
-  display: flex; align-items: center; gap: 10px; margin-top: 15px; padding-top: 14px;
-  border-top: 1px solid var(--border-2);
-}
-.scanner-photo-fallback input { position: absolute; width: 1px; height: 1px; overflow: hidden; opacity: 0; }
-.scanner-photo-fallback span { color: var(--text-mut); font-size: 11px; }
-.scanner-photo-fallback label { cursor: pointer; }
 .scanner-manual-help { margin-bottom: 16px; font-size: 12px; line-height: 1.5; }
 .scanner-search-btn { width: 100%; margin-top: 4px; }
 .scan-status {
@@ -1302,5 +1295,4 @@ input[type="time"]:focus {
   .scanner-camera-controls { align-items: stretch; flex-direction: column; }
   .scanner-camera-select-wrap { width: 100%; min-width: 0; }
   .scanner-button-row .btn { flex: 1; }
-  .scanner-photo-fallback { align-items: flex-start; flex-direction: column; }
 }

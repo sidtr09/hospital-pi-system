@@ -1979,11 +1979,6 @@ PAGES['scan-wristband'] = async (el) => {
               <button class="btn btn-secondary" id="scan-stop-btn" disabled>Stop Camera</button>
             </div>
           </div>
-          <div class="scanner-photo-fallback">
-            <label class="btn btn-ghost" for="scan-photo-input">Choose Barcode Photo</label>
-            <input id="scan-photo-input" type="file" accept="image/*" capture="environment">
-            <span>Decoded locally; the image is never uploaded or saved.</span>
-          </div>
         </div>
       </section>
       <section class="card scanner-manual-card">
@@ -2013,7 +2008,6 @@ PAGES['scan-wristband'] = async (el) => {
   const placeholder = $('scan-video-placeholder');
   const manualInput = $('scan-manual-id');
   const searchButton = $('scan-search-btn');
-  const photoInput = $('scan-photo-input');
   const anotherButton = $('scan-another-btn');
   const resultPanel = $('scan-result');
   const duplicateGuard = scannerUtils?.createDuplicateGuard(3500);
@@ -2096,7 +2090,6 @@ PAGES['scan-wristband'] = async (el) => {
     restartCameraAfterLookup = cameraActive;
     await stopCamera({ silent: true });
     searchButton.disabled = true;
-    photoInput.disabled = true;
     setScanStatus(`Looking up ${patientRef}…`, 'info');
     try {
       const patient = await api('POST', '/wristbands/scan', { patient_ref: patientRef });
@@ -2114,7 +2107,7 @@ PAGES['scan-wristband'] = async (el) => {
       setScanStatus(scannerUtils?.lookupErrorMessage(error.status) || error.message, 'error');
     } finally {
       lookupInFlight = false;
-      if (!destroyed) { searchButton.disabled = false; photoInput.disabled = false; }
+      if (!destroyed) searchButton.disabled = false;
     }
   }
 
@@ -2162,24 +2155,6 @@ PAGES['scan-wristband'] = async (el) => {
     }
   }
 
-  async function scanPhoto(file) {
-    if (!file || destroyed) return;
-    if (!file.type.startsWith('image/')) return setScanStatus('Choose an image containing a Code 128 barcode or QR code.', 'error');
-    if (file.size > 10 * 1024 * 1024) return setScanStatus('Barcode photo is too large. Choose an image smaller than 10 MB.', 'error');
-    await stopCamera({ silent: true });
-    setScanStatus('Reading barcode photo locally…', 'info');
-    const objectUrl = URL.createObjectURL(file);
-    try {
-      const result = await ensureReader().decodeFromImageUrl(objectUrl);
-      await processPatientId(result.getText(), 'photo');
-    } catch {
-      setScanStatus('We could not read this wristband. Hold the barcode steady, try the QR backup, or enter the Patient ID manually.', 'error');
-    } finally {
-      URL.revokeObjectURL(objectUrl);
-      photoInput.value = '';
-    }
-  }
-
   currentPageCleanup = () => { destroyed = true; stopCamera({ silent: true }); };
   $('scan-back-btn').onclick = () => navigate('dashboard');
   startButton.onclick = () => startCamera();
@@ -2191,7 +2166,6 @@ PAGES['scan-wristband'] = async (el) => {
   };
   searchButton.onclick = () => processPatientId(manualInput.value, 'manual');
   manualInput.onkeydown = event => { if (event.key === 'Enter') processPatientId(manualInput.value, 'manual'); };
-  photoInput.onchange = () => scanPhoto(photoInput.files?.[0]);
   anotherButton.onclick = async () => {
     closeModal();
     duplicateGuard?.reset();
