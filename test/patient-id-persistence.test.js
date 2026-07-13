@@ -179,6 +179,15 @@ test('Patient IDs and wristband backend remain correct across restart', { timeou
     const unauthorized = await request(server, 'GET',
       `/api/wristbands/lookup/${first.patient_ref}`);
     assert.equal(unauthorized.response.status, 401);
+    const unauthorizedScan = await request(server, 'POST', '/api/wristbands/scan', {
+      patient_ref: first.patient_ref,
+    });
+    assert.equal(unauthorizedScan.response.status, 401);
+
+    const scannerBundle = await fetch(`${server.baseUrl}/vendor/zxing-browser.min.js`);
+    assert.equal(scannerBundle.status, 200);
+    assert.match(scannerBundle.headers.get('content-type') || '', /javascript/);
+    assert.match((await scannerBundle.text()).slice(0, 300), /ZXingBrowser/);
 
     // The standalone page is a data-free shell; patient data still requires
     // the authenticated API above.

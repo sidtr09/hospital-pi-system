@@ -118,6 +118,7 @@ const ICONS = {
   // Actions / UI
   plus:         '<line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>',
   refresh:      '<polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>',
+  scan:         '<path d="M3 7V5a2 2 0 0 1 2-2h2M17 3h2a2 2 0 0 1 2 2v2M21 17v2a2 2 0 0 1-2 2h-2M7 21H5a2 2 0 0 1-2-2v-2"/><line x1="7" y1="8" x2="7" y2="16"/><line x1="10" y1="8" x2="10" y2="16"/><line x1="14" y1="8" x2="14" y2="16"/><line x1="17" y1="8" x2="17" y2="16"/>',
   calendar:     '<rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>',
   logout:       '<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/>',
   x:            '<line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>',
@@ -503,6 +504,7 @@ const ROLE_CONFIG = {
       { section: 'Patients' },
       { page: 'patient-search',   icon: 'search',    tone: 'teal',   label: 'Patient Search' },
       { page: 'patient-register', icon: 'userPlus',  tone: 'green',  label: 'New Patient' },
+      { page: 'scan-wristband',   icon: 'scan',      tone: 'blue',   label: 'Scan Wristband' },
       { section: 'Inventory' },
       { page: 'stock-ledger',     icon: 'package',   tone: 'orange', label: 'Stock Ledger' },
       { page: 'low-stock',        icon: 'alert',     tone: 'red',    label: 'Low Stock' },
@@ -532,6 +534,7 @@ const ROLE_CONFIG = {
       { section: 'Patients' },
       { page: 'patient-search',   icon: 'search',    tone: 'teal',   label: 'Patient Search' },
       { page: 'patient-register', icon: 'userPlus',  tone: 'green',  label: 'New Patient' },
+      { page: 'scan-wristband',   icon: 'scan',      tone: 'blue',   label: 'Scan Wristband' },
       { section: 'Clinical Flow' },
       { page: 'triage-queue',     icon: 'ambulance', tone: 'red',    label: 'Triage Queue' },
       { section: 'Team' },
@@ -551,6 +554,7 @@ const ROLE_CONFIG = {
       { section: 'Patients' },
       { page: 'patient-search',   icon: 'search',    tone: 'teal',   label: 'Patient Search' },
       { page: 'patient-register', icon: 'userPlus',  tone: 'green',  label: 'New Patient' },
+      { page: 'scan-wristband',   icon: 'scan',      tone: 'blue',   label: 'Scan Wristband' },
       { section: 'Clinical Flow' },
       { page: 'triage-queue',     icon: 'ambulance', tone: 'red',    label: 'Triage Queue' },
       { page: 'staff-roster',     icon: 'users',     tone: 'violet', label: 'Staff Roster' },
@@ -568,6 +572,7 @@ const ROLE_CONFIG = {
 let currentRole = null;
 let currentUser = null;
 let currentPage = null;
+let currentPageCleanup = null;
 
 /* Populate a <select> with the clinical staff (Doctor + Nurse), including the
    signed-in user — the API hides self by design, so we re-inject it here.
@@ -662,7 +667,14 @@ function buildSidebar(role) {
    NAVIGATION
 ════════════════════════════════════════════════════════════════ */
 const PAGES = {};
+function cleanupCurrentPage() {
+  if (!currentPageCleanup) return;
+  try { currentPageCleanup(); } catch {}
+  currentPageCleanup = null;
+}
+
 function navigate(page) {
+  cleanupCurrentPage();
   currentPage = page;
   $('sidebar').querySelectorAll('.nav-item').forEach(el =>
     el.classList.toggle('active', el.dataset.page === page));
@@ -755,6 +767,7 @@ $('show-login').onclick    = () => { setText('register-error',''); showAuthCard(
 $('pending-back').onclick  = () => showAuthCard('login');
 
 $('logout-btn').onclick = async () => {
+  cleanupCurrentPage();
   await api('POST', '/auth/logout');
   document.body.className = '';
   currentRole = null; currentUser = null;
@@ -764,6 +777,8 @@ $('logout-btn').onclick = async () => {
   showAuthCard('login');
   $('username').value = ''; $('password').value = '';
 };
+
+window.addEventListener('beforeunload', cleanupCurrentPage);
 
 /* ════════════════════════════════════════════════════════════════
    GLOBAL SEARCH (navbar)
@@ -1857,6 +1872,7 @@ window.viewPatient = async (id) => {
     const printLabel = count > 0 ? 'Reprint Wristband Label' : 'Print Wristband Label';
     const sex = { M:'Male', F:'Female', O:'Other' }[p.sex] || p.sex || '—';
     const canEdit = currentRole === 'Administrator' || currentRole === 'Doctor';
+    const fromScanner = currentPage === 'scan-wristband';
 
     setHTML('modal-body', `
       <div class="form-grid" style="margin-bottom:18px">
@@ -1894,18 +1910,305 @@ window.viewPatient = async (id) => {
       </div>
       <div class="form-actions" style="flex-wrap:wrap">
         <button class="btn btn-ghost" id="pv-close">Close</button>
+        ${fromScanner ? `<button class="btn btn-primary-accent" id="pv-scan-another">${icon('scan',12)}<span>Scan Another Wristband</span></button>` : ''}
         <button class="btn btn-secondary" id="pv-notes">${icon('fileText',12)}<span>Clinical Notes</span></button>
         ${canEdit ? `<button class="btn btn-secondary" id="pv-edit">${icon('edit',12)}<span>Edit Patient</span></button>` : ''}
         <button class="btn btn-primary-accent" id="pv-wristband">${icon('fileText',12)}<span>${printLabel}</span></button>
       </div>`);
 
     $('pv-close').onclick = closeModal;
+    if ($('pv-scan-another')) $('pv-scan-another').onclick = () => {
+      closeModal();
+      $('scan-another-btn')?.click();
+    };
     $('pv-notes').onclick = () => { closeModal(); viewNotes(id, p.full_name); };
     if ($('pv-edit')) $('pv-edit').onclick = () => { closeModal(); editPatient(id); };
     $('pv-wristband').onclick = () => openWristbandPage(id);
   } catch (e) {
     setHTML('modal-body', `<div class="alert alert-error">${escapeHtml(e.message)}</div>`);
   }
+};
+
+/* ════════════════════════════════════════════════════════════════
+   WRISTBAND SCANNER — local Code 128 / QR decoding
+════════════════════════════════════════════════════════════════ */
+PAGES['scan-wristband'] = async (el) => {
+  const scannerUtils = window.CliniqScannerUtils;
+  const renderSignInRequired = () => {
+    el.innerHTML = `<div class="scanner-auth-state"><div class="empty">
+      <div class="icon">${icon('lock', 36, 'orange')}</div>
+      <h2>Sign in required</h2>
+      <p>Your Cliniq session has expired. Sign in before scanning a wristband.</p>
+      <a class="btn btn-primary-accent" href="/">Return to Cliniq Sign In</a>
+    </div></div>`;
+  };
+
+  try { await api('GET', '/auth/me'); }
+  catch (error) {
+    if (error.status === 401) return renderSignInRequired();
+    el.innerHTML = `<div class="alert alert-error">${escapeHtml(error.message)}</div>`;
+    return;
+  }
+  if (currentPage !== 'scan-wristband') return;
+
+  el.innerHTML = `
+    <div class="page-header">
+      <div><h1>Scan Wristband</h1><p>Scan the Code 128 label or QR backup to open the patient record</p></div>
+      <button class="btn btn-secondary" id="scan-back-btn">← Back to Cliniq</button>
+    </div>
+    <div class="scanner-layout">
+      <section class="card scanner-camera-card">
+        <div class="card-head"><h2>${icon('scan',16,'blue')}Camera Scanner</h2><span class="meta">Code 128 · QR</span></div>
+        <div class="card-body">
+          <div class="alert alert-warning scanner-secure-warning hidden" id="scan-secure-warning"></div>
+          <div class="scanner-video-frame">
+            <video id="scan-video" autoplay muted playsinline aria-label="Wristband camera preview"></video>
+            <div class="scanner-target" aria-hidden="true"><span></span></div>
+            <div class="scanner-video-placeholder" id="scan-video-placeholder">
+              ${icon('scan',38,'gray')}<strong>Camera is off</strong><span>Press Start Camera when ready</span>
+            </div>
+          </div>
+          <p class="scanner-instructions">Hold the barcode steady inside the frame. Keep the full Code 128 label visible, or use the QR backup.</p>
+          <div class="scanner-camera-controls">
+            <div class="form-group scanner-camera-select-wrap" id="scan-camera-select-wrap">
+              <label for="scan-camera-select">Camera</label>
+              <select id="scan-camera-select" disabled><option value="">Default / rear camera</option></select>
+            </div>
+            <div class="scanner-button-row">
+              <button class="btn btn-primary-accent" id="scan-start-btn">${icon('scan',13)}<span>Start Camera</span></button>
+              <button class="btn btn-secondary" id="scan-stop-btn" disabled>Stop Camera</button>
+            </div>
+          </div>
+          <div class="scanner-photo-fallback">
+            <label class="btn btn-ghost" for="scan-photo-input">Choose Barcode Photo</label>
+            <input id="scan-photo-input" type="file" accept="image/*" capture="environment">
+            <span>Decoded locally; the image is never uploaded or saved.</span>
+          </div>
+        </div>
+      </section>
+      <section class="card scanner-manual-card">
+        <div class="card-head"><h2>${icon('search',16,'teal')}Manual Patient ID</h2></div>
+        <div class="card-body">
+          <p class="text-mut scanner-manual-help">If scanning is unavailable, enter the visible ID printed on the wristband label.</p>
+          <div class="form-group">
+            <label for="scan-manual-id">Permanent Patient ID</label>
+            <input id="scan-manual-id" class="mono" autocomplete="off" placeholder="CLQ-2026-000154" spellcheck="false">
+          </div>
+          <button class="btn btn-primary-accent scanner-search-btn" id="scan-search-btn">${icon('search',13)}<span>Search Patient</span></button>
+          <div class="scan-status tone-info" id="scan-status" role="status" aria-live="polite">Ready. Start the camera or enter a Patient ID manually.</div>
+          <div class="scanner-result hidden" id="scan-result">
+            <div class="scanner-result-check">${icon('check',20,'green')}</div>
+            <div><div class="scanner-result-label">Resolved Patient ID</div><div class="scanner-result-id mono" id="scan-result-id">—</div></div>
+          </div>
+          <button class="btn btn-secondary scanner-another-btn hidden" id="scan-another-btn">${icon('scan',13)}<span>Scan Another Wristband</span></button>
+        </div>
+      </section>
+    </div>`;
+
+  const video = $('scan-video');
+  const startButton = $('scan-start-btn');
+  const stopButton = $('scan-stop-btn');
+  const cameraSelect = $('scan-camera-select');
+  const cameraSelectWrap = $('scan-camera-select-wrap');
+  const placeholder = $('scan-video-placeholder');
+  const manualInput = $('scan-manual-id');
+  const searchButton = $('scan-search-btn');
+  const photoInput = $('scan-photo-input');
+  const anotherButton = $('scan-another-btn');
+  const resultPanel = $('scan-result');
+  const duplicateGuard = scannerUtils?.createDuplicateGuard(3500);
+  const cameraSupport = scannerUtils?.cameraAvailability(window.isSecureContext, navigator.mediaDevices)
+    || { available: false, message: 'Scanner support did not load. Enter the Patient ID manually.' };
+  let reader = null;
+  let scannerControls = null;
+  let cameraActive = false;
+  let lookupInFlight = false;
+  let restartCameraAfterLookup = false;
+  let destroyed = false;
+  let cameraRequestVersion = 0;
+
+  function setScanStatus(message, tone = 'info') {
+    const status = $('scan-status');
+    if (!status) return;
+    status.className = `scan-status tone-${tone}`;
+    status.textContent = message;
+  }
+
+  function ensureReader() {
+    if (!window.ZXingBrowser?.BrowserMultiFormatReader) throw new Error('Local barcode scanner failed to load. Enter the Patient ID manually.');
+    if (!reader) {
+      reader = new window.ZXingBrowser.BrowserMultiFormatReader();
+      reader.possibleFormats = [
+        window.ZXingBrowser.BarcodeFormat.CODE_128,
+        window.ZXingBrowser.BarcodeFormat.QR_CODE,
+      ];
+    }
+    return reader;
+  }
+
+  async function refreshCameraList() {
+    if (!navigator.mediaDevices?.enumerateDevices || destroyed) return;
+    try {
+      const devices = (await navigator.mediaDevices.enumerateDevices()).filter(device => device.kind === 'videoinput');
+      const selected = cameraSelect.value;
+      cameraSelect.innerHTML = '<option value="">Default / rear camera</option>'
+        + devices.map((device, index) => `<option value="${escapeHtml(device.deviceId)}">${escapeHtml(device.label || `Camera ${index + 1}`)}</option>`).join('');
+      cameraSelect.disabled = devices.length <= 1;
+      cameraSelectWrap.classList.toggle('single-camera', devices.length <= 1);
+      if (selected && devices.some(device => device.deviceId === selected)) cameraSelect.value = selected;
+    } catch { /* keep the safe default */ }
+  }
+
+  async function stopCamera({ silent = false } = {}) {
+    cameraRequestVersion++;
+    cameraActive = false;
+    try { scannerControls?.stop(); } catch {}
+    scannerControls = null;
+    scannerUtils?.stopMediaStream(video?.srcObject);
+    if (video) video.srcObject = null;
+    placeholder?.classList.remove('hidden');
+    if (startButton) startButton.disabled = !cameraSupport.available;
+    if (stopButton) stopButton.disabled = true;
+    if (!silent && !destroyed) setScanStatus('Camera stopped. Manual Patient ID entry remains available.', 'info');
+  }
+
+  async function renderAuthExpired() {
+    await stopCamera({ silent: true });
+    destroyed = true;
+    renderSignInRequired();
+  }
+
+  async function processPatientId(rawValue, source) {
+    if (destroyed || lookupInFlight) return;
+    const patientRef = scannerUtils?.normalizePatientId(rawValue);
+    if (!patientRef) {
+      setScanStatus(source === 'camera'
+        ? 'Unsupported barcode or invalid Cliniq Patient ID. Try the Code 128 label, QR backup, or manual entry.'
+        : 'Invalid Cliniq Patient ID. Enter a supported CLQ-* or PAT-* ID.', 'error');
+      return;
+    }
+    if (!duplicateGuard?.accept(patientRef)) {
+      setScanStatus('Duplicate scan ignored. Choose Scan Another Wristband to scan this label again.', 'warning');
+      return;
+    }
+
+    lookupInFlight = true;
+    restartCameraAfterLookup = cameraActive;
+    await stopCamera({ silent: true });
+    searchButton.disabled = true;
+    photoInput.disabled = true;
+    setScanStatus(`Looking up ${patientRef}…`, 'info');
+    try {
+      const patient = await api('POST', '/wristbands/scan', { patient_ref: patientRef });
+      if (destroyed) return;
+      setText('scan-result-id', patient.patient_ref);
+      resultPanel.classList.remove('hidden');
+      anotherButton.classList.remove('hidden');
+      manualInput.value = '';
+      setScanStatus(`Wristband resolved: ${patient.patient_ref}`, 'success');
+      viewPatient(patient.id);
+    } catch (error) {
+      if (error.status === 401) return renderAuthExpired();
+      resultPanel.classList.add('hidden');
+      anotherButton.classList.remove('hidden');
+      setScanStatus(scannerUtils?.lookupErrorMessage(error.status) || error.message, 'error');
+    } finally {
+      lookupInFlight = false;
+      if (!destroyed) { searchButton.disabled = false; photoInput.disabled = false; }
+    }
+  }
+
+  async function startCamera({ resetDuplicate = true } = {}) {
+    if (destroyed || cameraActive) return;
+    if (!cameraSupport.available) return setScanStatus(cameraSupport.message, 'warning');
+    const requestVersion = ++cameraRequestVersion;
+    try {
+      const codeReader = ensureReader();
+      if (resetDuplicate) duplicateGuard?.reset();
+      startButton.disabled = true;
+      stopButton.disabled = false;
+      setScanStatus('Requesting camera access…', 'info');
+      const selectedDevice = cameraSelect.value;
+      const videoConstraints = selectedDevice
+        ? { deviceId: { exact: selectedDevice } }
+        : { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 720 } };
+      const controls = await codeReader.decodeFromConstraints(
+        { audio: false, video: videoConstraints }, video,
+        result => { if (result && !lookupInFlight && !destroyed) processPatientId(result.getText(), 'camera'); }
+      );
+      if (destroyed || requestVersion !== cameraRequestVersion) {
+        try { controls.stop(); } catch {}
+        scannerUtils?.stopMediaStream(video.srcObject);
+        return;
+      }
+      scannerControls = controls;
+      cameraActive = true;
+      placeholder.classList.add('hidden');
+      startButton.disabled = true;
+      stopButton.disabled = false;
+      setScanStatus('Camera active. Hold the Code 128 barcode or QR backup inside the frame.', 'success');
+      await refreshCameraList();
+      for (const track of video.srcObject?.getVideoTracks?.() || []) {
+        track.addEventListener('ended', () => {
+          if (!cameraActive || destroyed) return;
+          stopCamera({ silent: true });
+          setScanStatus('The camera disconnected. Reconnect it or enter the Patient ID manually.', 'error');
+        }, { once: true });
+      }
+    } catch (error) {
+      if (requestVersion !== cameraRequestVersion) return;
+      await stopCamera({ silent: true });
+      setScanStatus(scannerUtils?.cameraErrorMessage(error) || 'Camera unavailable.', 'error');
+    }
+  }
+
+  async function scanPhoto(file) {
+    if (!file || destroyed) return;
+    if (!file.type.startsWith('image/')) return setScanStatus('Choose an image containing a Code 128 barcode or QR code.', 'error');
+    if (file.size > 10 * 1024 * 1024) return setScanStatus('Barcode photo is too large. Choose an image smaller than 10 MB.', 'error');
+    await stopCamera({ silent: true });
+    setScanStatus('Reading barcode photo locally…', 'info');
+    const objectUrl = URL.createObjectURL(file);
+    try {
+      const result = await ensureReader().decodeFromImageUrl(objectUrl);
+      await processPatientId(result.getText(), 'photo');
+    } catch {
+      setScanStatus('We could not read this wristband. Hold the barcode steady, try the QR backup, or enter the Patient ID manually.', 'error');
+    } finally {
+      URL.revokeObjectURL(objectUrl);
+      photoInput.value = '';
+    }
+  }
+
+  currentPageCleanup = () => { destroyed = true; stopCamera({ silent: true }); };
+  $('scan-back-btn').onclick = () => navigate('dashboard');
+  startButton.onclick = () => startCamera();
+  stopButton.onclick = () => stopCamera();
+  cameraSelect.onchange = async () => {
+    if (!cameraActive) return;
+    await stopCamera({ silent: true });
+    await startCamera({ resetDuplicate: false });
+  };
+  searchButton.onclick = () => processPatientId(manualInput.value, 'manual');
+  manualInput.onkeydown = event => { if (event.key === 'Enter') processPatientId(manualInput.value, 'manual'); };
+  photoInput.onchange = () => scanPhoto(photoInput.files?.[0]);
+  anotherButton.onclick = async () => {
+    closeModal();
+    duplicateGuard?.reset();
+    resultPanel.classList.add('hidden');
+    anotherButton.classList.add('hidden');
+    setScanStatus('Ready to scan another wristband.', 'info');
+    if (restartCameraAfterLookup && cameraSupport.available) await startCamera({ resetDuplicate: false });
+    else manualInput.focus();
+  };
+
+  if (!cameraSupport.available) {
+    const warning = $('scan-secure-warning');
+    warning.textContent = cameraSupport.message;
+    warning.classList.remove('hidden');
+    startButton.disabled = true;
+    cameraSelect.disabled = true;
+  } else refreshCameraList();
 };
 
 // Re-run the active patient search after a successful edit/delete so the

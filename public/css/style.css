@@ -1234,3 +1234,73 @@ input[type="time"]:focus {
   .global-search input { width: 160px; }
   .main { padding: var(--s-4); }
 }
+
+/* ═══ Wristband scanner ═══════════════════════════════════════ */
+.scanner-layout {
+  display: grid; grid-template-columns: minmax(0, 1.35fr) minmax(320px, .65fr);
+  gap: 20px; align-items: start;
+}
+.scanner-camera-card, .scanner-manual-card { overflow: hidden; }
+.scanner-video-frame {
+  position: relative; overflow: hidden; width: 100%; aspect-ratio: 16 / 10;
+  border: 1px solid var(--border); border-radius: 10px; background: #101820;
+}
+.scanner-video-frame video { display: block; width: 100%; height: 100%; object-fit: cover; }
+.scanner-video-placeholder {
+  position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+  flex-direction: column; gap: 8px; background: #f6f8f9; color: var(--text-mut); text-align: center;
+}
+.scanner-video-placeholder strong { color: var(--text); font-size: 14px; }
+.scanner-video-placeholder span:last-child { font-size: 11px; }
+.scanner-target {
+  position: absolute; z-index: 2; top: 50%; left: 50%; width: min(82%, 500px); height: 36%;
+  transform: translate(-50%, -50%); border: 2px solid rgba(255,255,255,.88); border-radius: 8px;
+  box-shadow: 0 0 0 999px rgba(0,0,0,.18); pointer-events: none;
+}
+.scanner-target::before, .scanner-target::after,
+.scanner-target span::before, .scanner-target span::after {
+  position: absolute; width: 24px; height: 24px; border-color: #27c2b5; border-style: solid; content: '';
+}
+.scanner-target::before { top: -3px; left: -3px; border-width: 3px 0 0 3px; }
+.scanner-target::after { top: -3px; right: -3px; border-width: 3px 3px 0 0; }
+.scanner-target span::before { bottom: -3px; left: -3px; border-width: 0 0 3px 3px; }
+.scanner-target span::after { right: -3px; bottom: -3px; border-width: 0 3px 3px 0; }
+.scanner-instructions { margin: 11px 0 16px; color: var(--text-mut); font-size: 12px; line-height: 1.5; }
+.scanner-camera-controls { display: flex; align-items: flex-end; justify-content: space-between; gap: 14px; }
+.scanner-camera-select-wrap { min-width: 220px; margin: 0; }
+.scanner-camera-select-wrap.single-camera { opacity: .7; }
+.scanner-button-row { display: flex; gap: 8px; }
+.scanner-secure-warning { margin-bottom: 14px; }
+.scanner-photo-fallback {
+  display: flex; align-items: center; gap: 10px; margin-top: 15px; padding-top: 14px;
+  border-top: 1px solid var(--border-2);
+}
+.scanner-photo-fallback input { position: absolute; width: 1px; height: 1px; overflow: hidden; opacity: 0; }
+.scanner-photo-fallback span { color: var(--text-mut); font-size: 11px; }
+.scanner-photo-fallback label { cursor: pointer; }
+.scanner-manual-help { margin-bottom: 16px; font-size: 12px; line-height: 1.5; }
+.scanner-search-btn { width: 100%; margin-top: 4px; }
+.scan-status {
+  margin-top: 18px; padding: 12px 13px; border: 1px solid var(--border); border-radius: 8px;
+  font-size: 12px; line-height: 1.45;
+}
+.scan-status.tone-info { border-color: #bfdbfe; background: #eff6ff; color: #1e4f8f; }
+.scan-status.tone-success { border-color: #a7e0ca; background: var(--success-soft); color: #07664f; }
+.scan-status.tone-warning { border-color: #f2d08b; background: #fffbeb; color: #854d0e; }
+.scan-status.tone-error { border-color: #f5c2c0; background: #fff5f5; color: #8a1c16; }
+.scanner-result {
+  display: flex; align-items: center; gap: 11px; margin-top: 14px; padding: 13px;
+  border: 1px solid #a7e0ca; border-radius: 8px; background: var(--success-soft);
+}
+.scanner-result-check { display: grid; width: 32px; height: 32px; place-items: center; border-radius: 50%; background: #fff; }
+.scanner-result-label { color: var(--text-mut); font-size: 10px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; }
+.scanner-result-id { margin-top: 2px; font-size: 14px; font-weight: 800; }
+.scanner-another-btn { width: 100%; margin-top: 12px; }
+.scanner-auth-state { max-width: 640px; margin: 60px auto; }
+@media (max-width: 900px) { .scanner-layout { grid-template-columns: 1fr; } }
+@media (max-width: 620px) {
+  .scanner-camera-controls { align-items: stretch; flex-direction: column; }
+  .scanner-camera-select-wrap { width: 100%; min-width: 0; }
+  .scanner-button-row .btn { flex: 1; }
+  .scanner-photo-fallback { align-items: flex-start; flex-direction: column; }
+}

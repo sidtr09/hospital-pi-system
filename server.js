@@ -34,6 +34,11 @@ const sessionMiddleware = require('./middleware/session.middleware');
 const app = express();
 let httpServer = null;
 let shuttingDown = false;
+const zxingBrowserBundle = path.join(
+  path.dirname(require.resolve('@zxing/browser/package.json')),
+  'umd',
+  'zxing-browser.min.js'
+);
 
 // ── Security headers (CSP locked to LAN — no external resource fetch) ────────
 app.use(helmet({
@@ -86,6 +91,13 @@ app.use(express.static(path.join(__dirname, 'public'), {
   etag: true,
   lastModified: true,
 }));
+
+// Serve the pinned npm browser bundle locally. Cliniq never loads scanner code
+// from a CDN or cloud service, so decoding remains fully offline.
+app.get('/vendor/zxing-browser.min.js', (_req, res) => {
+  res.setHeader('Cache-Control', 'public, max-age=3600');
+  res.sendFile(zxingBrowserBundle);
+});
 
 // ── Response-time header injection (must run before response is written) ──────
 app.use((req, res, next) => {
