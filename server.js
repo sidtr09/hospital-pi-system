@@ -31,6 +31,8 @@ const systemRoutes   = require('./routes/system.routes');
 const sessionMiddleware = require('./middleware/session.middleware');
 
 const app = express();
+let httpServer = null;
+let shuttingDown = false;
 
 // ── Security headers (CSP locked to LAN — no external resource fetch) ────────
 app.use(helmet({
@@ -143,10 +145,35 @@ app.use((err, req, res, _next) => {
 // ── Server bootstrap ──────────────────────────────────────────────────────────
 async function bootstrap() {
   await db.initialize();
-  app.listen(appConfig.port, appConfig.host, () => {
+  const patientCount = await db.get('SELECT COUNT(*) AS count FROM patients');
+  console.log(`[DB] Patient count: ${patientCount?.count ?? 0}`);
+
+  httpServer = app.listen(appConfig.port, appConfig.host, () => {
     console.log(`Cliniq running on http://${appConfig.host}:${appConfig.port}`);
     console.log(`Environment : ${appConfig.env}`);
     console.log(`Database    : ${appConfig.dbPath}`);
+  });
+}
+
+async function shutdown(signal) {
+  if (shuttingDown) return;
+  shuttingDown = true;
+  console.log(`Received ${signal}; shutting down cleanly`);
+
+  if (httpServer) {
+    await new Promise(resolve => httpServer.close(resolve));
+  }
+  await db.close();
+}
+
+for (const signal of ['SIGINT', 'SIGTERM']) {
+  process.once(signal, () => {
+    shutdown(signal)
+      .then(() => process.exit(0))
+      .catch(err => {
+        console.error('Shutdown error:', err);
+        process.exit(1);
+      });
   });
 }
 

@@ -8,18 +8,27 @@
 
 const path = require('path');
 
+const projectRoot = path.join(__dirname, '..');
+const configuredDbPath = process.env.DB_PATH;
+
 const config = {
   env:  process.env.NODE_ENV || 'production',
   host: process.env.HOST     || '0.0.0.0',       // Bind to all LAN interfaces
   port: parseInt(process.env.PORT || '3000', 10),
 
   // SQLite database file — store on USB-attached drive if available
-  dbPath: process.env.DB_PATH
-    || path.join(__dirname, '..', 'database', 'hospital.db'),
+  // Resolve relative overrides from the project root rather than the shell's
+  // working directory. A Pi therefore opens the same database regardless of
+  // which directory systemd (or an operator) starts Node from.
+  dbPath: configuredDbPath
+    ? (path.isAbsolute(configuredDbPath)
+        ? configuredDbPath
+        : path.resolve(projectRoot, configuredDbPath))
+    : path.join(projectRoot, 'database', 'hospital.db'),
 
   // Backup destination — external USB mount or fallback to local backup/
   backupDir: process.env.BACKUP_DIR
-    || path.join(__dirname, '..', 'backup'),
+    || path.join(projectRoot, 'backup'),
 
   // Static asset Cache-Control max-age (1 hour — safe for LAN, no stale risk)
   staticCacheMaxAge: '1h',

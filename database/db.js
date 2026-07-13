@@ -3,9 +3,12 @@
 const sqlite3   = require('sqlite3').verbose();
 const path      = require('path');
 const fs        = require('fs');
+const { AsyncLocalStorage } = require('node:async_hooks');
 const appConfig = require('../config/app.config');
 
 let _db = null;
+let _operationTail = Promise.resolve();
+const transactionContext = new AsyncLocalStorage();
 
 const runAsync = (db, sql, params = []) => new Promise((res, rej) =>
   db.run(sql, params, function (err) {
@@ -25,6 +28,21 @@ function applyPragmas(db, pragmas) {
       db.run(`PRAGMA ${key} = ${value}`);
     }
   });
+}
+
+// sqlite3 uses one connection, so an async transaction must prevent unrelated
+// request queries from being queued between BEGIN and COMMIT. Each ordinary
+// operation takes this lightweight mutex; calls made from inside transaction()
+// reuse the lock through AsyncLocalStorage.
+function withDbLock(operation) {
+  const previous = _operationTail;
+  let release;
+  _operationTail = new Promise(resolve => { release = resolve; });
+  return previous.then(operation).finally(release);
+}
+
+function inTransaction() {
+  return transactionContext.getStore() === true;
 }
 
 // Additive column migrations. SQLite doesn't support ADD COLUMN IF NOT EXISTS,
@@ -94,28 +112,45 @@ const db = {
     await loadSchema(_db);
     console.log('[DB] Schema applied successfully');
 
-    process.on('exit',    () => { try { _db?.close(); } catch {} });
-    process.on('SIGINT',  () => process.exit(0));
-    process.on('SIGTERM', () => process.exit(0));
-
     console.log(`[DB] Connected: ${appConfig.dbPath}`);
     return _db;
   },
 
-  all(sql, params = [])  { return allAsync(_db, sql, params); },
-  get(sql, params = [])  { return getAsync(_db, sql, params); },
-  run(sql, params = [])  { return runAsync(_db, sql, params); },
+  all(sql, params = [])  {
+    const operation = () => allAsync(_db, sql, params);
+    return inTransaction() ? operation() : withDbLock(operation);
+  },
+  get(sql, params = [])  {
+    const operation = () => getAsync(_db, sql, params);
+    return inTransaction() ? operation() : withDbLock(operation);
+  },
+  run(sql, params = [])  {
+    const operation = () => runAsync(_db, sql, params);
+    return inTransaction() ? operation() : withDbLock(operation);
+  },
 
   async transaction(fn) {
-    await runAsync(_db, 'BEGIN');
-    try {
-      const result = await fn();
-      await runAsync(_db, 'COMMIT');
-      return result;
-    } catch (err) {
-      await runAsync(_db, 'ROLLBACK');
-      throw err;
-    }
+    if (inTransaction()) throw new Error('Nested database transactions are not supported');
+    return withDbLock(() => transactionContext.run(true, async () => {
+      await runAsync(_db, 'BEGIN IMMEDIATE');
+      try {
+        const result = await fn();
+        await runAsync(_db, 'COMMIT');
+        return result;
+      } catch (err) {
+        try { await runAsync(_db, 'ROLLBACK'); } catch {}
+        throw err;
+      }
+    }));
+  },
+
+  async close() {
+    if (!_db) return;
+    const connection = _db;
+    await withDbLock(() => new Promise((resolve, reject) => {
+      connection.close(err => err ? reject(err) : resolve());
+    }));
+    _db = null;
   },
 };
 

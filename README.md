@@ -27,6 +27,21 @@ A lightweight, LAN-only hospital management platform designed to run entirely on
 
 ## Running on Raspberry Pi
 
+### Persistent database location
+
+Cliniq resolves its default SQLite file from the project directory, not the
+terminal's current working directory. For a demo Pi, set an explicit absolute
+path so systemd and manual starts always open the same database:
+
+```bash
+export DB_PATH=/home/<pi-user>/Cliniq/database/hospital.db
+```
+
+The database is intentionally ignored by Git. Pulling or recloning the source
+does not move patient records between computers. Back up and transfer the
+SQLite database separately when needed; Cliniq never resets or seeds it during
+normal startup.
+
 ### Step 1 — Flash and boot the Pi
 
 Flash **Raspberry Pi OS Lite** (64-bit) to your SD card using Raspberry Pi Imager. Boot, connect to your local network via Ethernet or Wi-Fi.

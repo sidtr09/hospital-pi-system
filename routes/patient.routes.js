@@ -6,6 +6,7 @@
 'use strict';
 
 const express   = require('express');
+const crypto    = require('node:crypto');
 const db        = require('../database/db');
 const { logEvent } = require('./audit');
 const { requireAuth, apiLimiter } = require('../middleware/session.middleware');
@@ -34,27 +35,39 @@ router.get('/', async (req, res, next) => {
 // ── [ Patient Registration Form ] — create ────────────────────────────────────
 router.post('/', async (req, res, next) => {
   try {
-    const { patient_ref, full_name, date_of_birth, sex,
+    const { full_name, date_of_birth, sex,
             contact_number, address, blood_group, allergy_notes,
             emergency_contact } = req.body;
 
-    if (!patient_ref || !full_name || !date_of_birth) {
-      return res.status(400).json({ error: '[ Required fields missing: patient_ref, full_name, date_of_birth ]' });
+    if (!full_name || !date_of_birth) {
+      return res.status(400).json({ error: '[ Required fields missing: full_name, date_of_birth ]' });
     }
 
-    const result = await db.run(
-      `INSERT INTO patients
-         (patient_ref, full_name, date_of_birth, sex, contact_number, address, blood_group, allergy_notes, emergency_contact)
-       VALUES (?,?,?,?,?,?,?,?,?)`,
-      [patient_ref, full_name, date_of_birth, sex, contact_number, address, blood_group, allergy_notes, emergency_contact]
-    );
+    // patient_ref is deliberately ignored if an older client submits it. The
+    // backend is the sole authority for new public Patient IDs.
+    const created = await db.transaction(async () => {
+      const placeholder = `__pending__-${crypto.randomUUID()}`;
+      const inserted = await db.run(
+        `INSERT INTO patients
+           (patient_ref, full_name, date_of_birth, sex, contact_number, address, blood_group, allergy_notes, emergency_contact)
+         VALUES (?,?,?,?,?,?,?,?,?)`,
+        [placeholder, full_name, date_of_birth, sex, contact_number, address, blood_group, allergy_notes, emergency_contact]
+      );
 
-    await logEvent(req, 'patient.create', { target_kind: 'patient', target_id: patient_ref, detail: { id: result.lastInsertRowid } });
-    res.status(201).json({ id: result.lastInsertRowid, patient_ref });
+      const year = new Date().getUTCFullYear();
+      const patientRef = `CLQ-${year}-${String(inserted.lastInsertRowid).padStart(6, '0')}`;
+      await db.run('UPDATE patients SET patient_ref = ? WHERE id = ?',
+        [patientRef, inserted.lastInsertRowid]);
+      return { id: inserted.lastInsertRowid, patient_ref: patientRef };
+    });
+
+    await logEvent(req, 'patient.create', {
+      target_kind: 'patient',
+      target_id: created.patient_ref,
+      detail: { id: created.id },
+    });
+    res.status(201).json(created);
   } catch (err) {
-    if (err.code === 'SQLITE_CONSTRAINT_UNIQUE') {
-      return res.status(409).json({ error: '[ Patient reference already exists ]' });
-    }
     next(err);
   }
 });

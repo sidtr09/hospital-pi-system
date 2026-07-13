@@ -2028,7 +2028,6 @@ window.viewNotes = async (id, name) => {
    PATIENT REGISTRATION (Save & Add Another)
 ════════════════════════════════════════════════════════════════ */
 PAGES['patient-register'] = (el) => {
-  const auto = `PAT-${new Date().getFullYear()}-${Math.floor(Math.random()*9000+1000)}`;
   el.innerHTML = `
     <div class="page-header">
       <div><h1>New Patient</h1><p>Register a patient — tab through fields, then Save</p></div>
@@ -2040,13 +2039,9 @@ PAGES['patient-register'] = (el) => {
         <div class="card-body">
           <div class="form-grid">
             <div class="form-group">
-              <label>Patient Reference <span class="req">*</span></label>
-              <input id="r-ref" value="${auto}" placeholder="PAT-2024-001">
-              <span class="hint">Auto-generated — edit if your clinic uses a different scheme</span>
-            </div>
-            <div class="form-group">
               <label>Full Name <span class="req">*</span></label>
               <input id="r-name" placeholder="Full legal name" autofocus>
+              <span class="hint">Patient ID is generated securely after saving</span>
             </div>
             <div class="form-group">
               <label>Date of Birth <span class="req">*</span></label>
@@ -2100,7 +2095,6 @@ PAGES['patient-register'] = (el) => {
     </div>`;
 
   const fields = () => ({
-    patient_ref:       $('r-ref').value.trim(),
     full_name:         $('r-name').value.trim(),
     date_of_birth:     $('r-dob').value,
     sex:               $('r-sex').value,
@@ -2111,25 +2105,24 @@ PAGES['patient-register'] = (el) => {
     allergy_notes:     $('r-allergy').value,
   });
 
-  const clearForm = (newRef = true) => {
+  const clearForm = () => {
     ['r-name','r-dob','r-contact','r-emergency','r-address','r-allergy'].forEach(id => $(id).value = '');
     $('r-sex').value = ''; $('r-blood').value = '';
-    if (newRef) $('r-ref').value = `PAT-${new Date().getFullYear()}-${Math.floor(Math.random()*9000+1000)}`;
     $('r-name').focus();
   };
 
   const save = async (triageAfter) => {
     const f = fields();
-    if (!f.patient_ref || !f.full_name || !f.date_of_birth) {
-      toast('Reference, Name and DOB are required', 'warning'); return;
+    if (!f.full_name || !f.date_of_birth) {
+      toast('Name and DOB are required', 'warning'); return;
     }
     try {
-      await api('POST', '/patients', f);
-      toast(`Saved: ${f.full_name}`, 'success');
+      const created = await api('POST', '/patients', f);
+      toast(`Saved ${f.full_name} as ${created.patient_ref}`, 'success');
       await loadRecent();
       if (triageAfter) {
         // Pop the WHO triage form pre-loaded with the patient just registered.
-        showEnqueueModal(() => navigate('triage-queue'), { prefillRef: f.patient_ref });
+        showEnqueueModal(() => navigate('triage-queue'), { prefillRef: created.patient_ref });
       } else {
         navigate('patient-search');
       }
@@ -2137,7 +2130,7 @@ PAGES['patient-register'] = (el) => {
   };
 
   $('r-back-btn').onclick  = () => navigate('patient-search');
-  $('r-cancel').onclick    = () => clearForm(true);
+  $('r-cancel').onclick    = clearForm;
   $('r-save-only').onclick = () => save(false);
   $('r-save-next').onclick = () => save(true);
 
