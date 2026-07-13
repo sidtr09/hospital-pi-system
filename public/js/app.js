@@ -618,6 +618,19 @@ function closeModal() {
   $('modal-overlay').classList.remove('open');
   document.querySelector('.modal')?.classList.remove('wide');
 }
+
+// The standalone page receives only the internal numeric row ID. It retrieves
+// all printable fields through the authenticated wristband API.
+function openWristbandPage(patientId) {
+  const id = Number(patientId);
+  if (!Number.isSafeInteger(id) || id < 1) {
+    toast('Invalid patient record', 'error');
+    return;
+  }
+  const opened = window.open(`/wristband.html?patient=${id}`, '_blank');
+  if (opened) opened.opener = null;
+  else toast('Allow pop-ups to preview the wristband', 'warning');
+}
 $('modal-close').onclick = closeModal;
 $('modal-overlay').onclick = e => { if (e.target === $('modal-overlay')) closeModal(); };
 document.addEventListener('keydown', e => {
@@ -1804,6 +1817,7 @@ PAGES['patient-search'] = async (el) => {
           <td>${p.blood_group ? badge(p.blood_group,'danger') : '<span class="text-faint">—</span>'}</td>
           <td class="text-mut">${fmt(p.registered_at)}</td>
           <td style="white-space:nowrap;text-align:right">
+            <button class="btn btn-xs btn-ghost js-view" data-pid="${p.id}" title="View patient">${icon('eye',12)}<span>View</span></button>
             <button class="btn btn-xs btn-ghost js-notes" data-pid="${p.id}" data-pname="${escapeHtml(p.full_name)}">${icon('fileText',12)}<span>Notes</span></button>
             ${canEdit ? `<button class="btn btn-xs btn-ghost js-edit" data-pid="${p.id}" title="Edit patient">${icon('edit',12,'blue')}</button>` : ''}
             ${canEdit ? `<button class="btn btn-xs btn-ghost js-delete" data-pid="${p.id}" data-pname="${escapeHtml(p.full_name)}" title="Delete patient">${icon('trash',12,'red')}</button>` : ''}
@@ -1811,6 +1825,9 @@ PAGES['patient-search'] = async (el) => {
         </tr>`).join('')}</tbody></table></div>`);
 
       // Wire row buttons via JS handlers (robust against inline-onclick quirks)
+      $('ps-results').querySelectorAll('.js-view').forEach(btn => {
+        btn.onclick = () => viewPatient(btn.dataset.pid);
+      });
       $('ps-results').querySelectorAll('.js-notes').forEach(btn => {
         btn.onclick = () => viewNotes(btn.dataset.pid, btn.dataset.pname);
       });
@@ -1824,6 +1841,71 @@ PAGES['patient-search'] = async (el) => {
   });
   $('ps-input').oninput = run;
   run();
+};
+
+/* ════════════════════════════════════════════════════════════════
+   PATIENT DETAILS — existing modal workflow with wristband action
+════════════════════════════════════════════════════════════════ */
+window.viewPatient = async (id) => {
+  openModal('Patient Details', skelLines(6));
+  try {
+    const [p, wristband] = await Promise.all([
+      api('GET', `/patients/${id}`),
+      api('GET', `/wristbands/patients/${id}`),
+    ]);
+    const count = Number(wristband.wristband?.print_count || 0);
+    const printLabel = count > 0 ? 'Reprint Wristband Label' : 'Print Wristband Label';
+    const sex = { M:'Male', F:'Female', O:'Other' }[p.sex] || p.sex || '—';
+    const canEdit = currentRole === 'Administrator' || currentRole === 'Doctor';
+
+    setHTML('modal-body', `
+      <div class="form-grid" style="margin-bottom:18px">
+        <div class="form-group">
+          <label>Patient ID</label>
+          <div class="mono" style="font-size:15px;font-weight:700">${escapeHtml(maskRef(p.patient_ref))}</div>
+        </div>
+        <div class="form-group">
+          <label>Full Name</label>
+          <div style="font-weight:700"><span class="pii">${escapeHtml(p.full_name)}</span></div>
+        </div>
+        <div class="form-group">
+          <label>Date of Birth</label>
+          <div class="pii">${escapeHtml(p.date_of_birth || '—')}</div>
+        </div>
+        <div class="form-group">
+          <label>Sex</label>
+          <div>${escapeHtml(sex)}</div>
+        </div>
+        <div class="form-group">
+          <label>Blood Group</label>
+          <div>${p.blood_group ? badge(p.blood_group, 'danger') : '—'}</div>
+        </div>
+        <div class="form-group">
+          <label>Registered</label>
+          <div>${escapeHtml(fmt(p.registered_at))}</div>
+        </div>
+        <div class="form-group full">
+          <label>Known Allergies</label>
+          <div>${p.allergy_notes ? escapeHtml(p.allergy_notes) : '<span class="dim">No allergy information recorded</span>'}</div>
+        </div>
+      </div>
+      <div class="alert alert-info" style="margin-bottom:16px">
+        ${icon('fileText',14,'blue')}<span>Wristband print requests recorded: <strong>${count}</strong></span>
+      </div>
+      <div class="form-actions" style="flex-wrap:wrap">
+        <button class="btn btn-ghost" id="pv-close">Close</button>
+        <button class="btn btn-secondary" id="pv-notes">${icon('fileText',12)}<span>Clinical Notes</span></button>
+        ${canEdit ? `<button class="btn btn-secondary" id="pv-edit">${icon('edit',12)}<span>Edit Patient</span></button>` : ''}
+        <button class="btn btn-primary-accent" id="pv-wristband">${icon('fileText',12)}<span>${printLabel}</span></button>
+      </div>`);
+
+    $('pv-close').onclick = closeModal;
+    $('pv-notes').onclick = () => { closeModal(); viewNotes(id, p.full_name); };
+    if ($('pv-edit')) $('pv-edit').onclick = () => { closeModal(); editPatient(id); };
+    $('pv-wristband').onclick = () => openWristbandPage(id);
+  } catch (e) {
+    setHTML('modal-body', `<div class="alert alert-error">${escapeHtml(e.message)}</div>`);
+  }
 };
 
 // Re-run the active patient search after a successful edit/delete so the
@@ -2111,6 +2193,46 @@ PAGES['patient-register'] = (el) => {
     $('r-name').focus();
   };
 
+  const showSuccess = (created, patient, triageAfter) => {
+    el.innerHTML = `
+      <div class="page-header">
+        <div><h1>Patient Registered</h1><p>The record is saved permanently in Cliniq</p></div>
+      </div>
+      <div class="card" style="max-width:760px;margin:32px auto">
+        <div class="card-body" style="padding:34px">
+          <div style="display:flex;align-items:flex-start;gap:18px;margin-bottom:24px">
+            <div style="width:52px;height:52px;border-radius:50%;background:var(--success-soft);color:var(--success);display:flex;align-items:center;justify-content:center;flex-shrink:0">${icon('check',26,'green')}</div>
+            <div>
+              <h2 style="font-size:22px;margin-bottom:6px">Patient successfully registered</h2>
+              <p class="text-mut"><span class="pii">${escapeHtml(patient.full_name)}</span> now has a permanent Patient ID.</p>
+            </div>
+          </div>
+          <div style="border:1px solid var(--border);border-radius:10px;padding:18px;text-align:center;margin-bottom:24px;background:var(--surface-2)">
+            <div style="font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:var(--text-mut);font-weight:700">Permanent Patient ID</div>
+            <div class="mono" style="font-size:26px;font-weight:800;margin-top:7px;letter-spacing:.04em">${escapeHtml(created.patient_ref)}</div>
+          </div>
+          <div style="display:flex;flex-wrap:wrap;gap:10px;justify-content:center">
+            <button class="btn btn-secondary" id="reg-view-patient">${icon('eye',13)}<span>View Patient</span></button>
+            <button class="btn btn-primary-accent" id="reg-print-wristband">${icon('fileText',13)}<span>Print Wristband Label</span></button>
+            <button class="btn btn-secondary" id="reg-another">${icon('userPlus',13)}<span>Register Another Patient</span></button>
+            <button class="btn btn-secondary" id="reg-triage-now">${icon('ambulance',13,'red')}<span>Triage Now</span></button>
+          </div>
+        </div>
+      </div>`;
+
+    $('reg-view-patient').onclick = () => viewPatient(created.id);
+    $('reg-print-wristband').onclick = () => openWristbandPage(created.id);
+    $('reg-another').onclick = () => navigate('patient-register');
+    $('reg-triage-now').onclick = () => showEnqueueModal(
+      () => navigate('triage-queue'),
+      { prefillRef: created.patient_ref }
+    );
+
+    // Preserve the existing Save & Triage Now behavior while leaving the
+    // success panel available behind the modal.
+    if (triageAfter) setTimeout(() => $('reg-triage-now')?.click(), 0);
+  };
+
   const save = async (triageAfter) => {
     const f = fields();
     if (!f.full_name || !f.date_of_birth) {
@@ -2120,12 +2242,7 @@ PAGES['patient-register'] = (el) => {
       const created = await api('POST', '/patients', f);
       toast(`Saved ${f.full_name} as ${created.patient_ref}`, 'success');
       await loadRecent();
-      if (triageAfter) {
-        // Pop the WHO triage form pre-loaded with the patient just registered.
-        showEnqueueModal(() => navigate('triage-queue'), { prefillRef: created.patient_ref });
-      } else {
-        navigate('patient-search');
-      }
+      showSuccess(created, f, triageAfter);
     } catch(e) { toast(e.message, 'error'); }
   };
 

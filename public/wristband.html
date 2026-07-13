@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Wristband Label — Cliniq</title>
+  <link rel="stylesheet" href="/css/wristband.css?v=2">
+</head>
+<body>
+  <main class="page-shell">
+    <section class="state-card" id="page-state" role="status" aria-live="polite">
+      <div class="state-mark" aria-hidden="true">+</div>
+      <h1 id="state-title">Preparing wristband label…</h1>
+      <p id="state-message">Loading the permanent Patient ID from Cliniq.</p>
+      <a class="button secondary hidden" id="state-login" href="/">Return to Cliniq sign in</a>
+    </section>
+
+    <section class="label-page hidden" id="label-page">
+      <header class="preview-header no-print">
+        <div>
+          <p class="eyebrow">Cliniq patient identification</p>
+          <h1>Wristband Label Preview</h1>
+          <p>Print the labels, cut along each dashed border, and attach one to the handmade demo wristband.</p>
+        </div>
+        <div class="preview-actions">
+          <button class="button secondary" id="back-button" type="button">Back to Cliniq</button>
+          <button class="button primary" id="print-button" type="button" disabled>Preparing barcode…</button>
+        </div>
+      </header>
+
+      <div class="message hidden no-print" id="page-message" role="alert"></div>
+
+      <div class="preview-options no-print">
+        <label for="copy-count">Labels on this sheet</label>
+        <select id="copy-count">
+          <option value="1">Print 1 label</option>
+          <option value="4" selected>Print 4 labels</option>
+        </select>
+        <span>Multiple copies count as one print request.</span>
+      </div>
+
+      <div class="print-count no-print">
+        Recorded print requests: <strong id="print-count">0</strong>.
+        Opening this preview does not record a request.
+      </div>
+
+      <section class="print-sheet" aria-label="Printable wristband barcode labels">
+        <p class="cut-instruction no-print">Cut around each dashed label border</p>
+        <div class="labels-grid" id="labels-grid"></div>
+      </section>
+
+      <aside class="privacy-note no-print">
+        Each label displays and encodes only the permanent Patient ID. No patient or clinical details are printed.
+      </aside>
+    </section>
+  </main>
+
+  <template id="label-template">
+    <article class="barcode-label">
+      <div class="label-main">
+        <div class="label-heading">
+          <span class="label-brand"><span aria-hidden="true">+</span> Cliniq</span>
+          <span class="label-patient-ref">—</span>
+        </div>
+        <div class="primary-caption">PRIMARY · CODE 128</div>
+        <img class="code128-image" alt="Code 128 permanent Patient ID barcode">
+        <div class="barcode-error code128-error hidden">Code 128 barcode unavailable</div>
+      </div>
+      <div class="label-qr">
+        <div class="backup-caption">BACKUP</div>
+        <img class="qr-image" alt="Backup QR permanent Patient ID barcode">
+        <div class="barcode-error qr-error hidden">QR unavailable</div>
+      </div>
+    </article>
+  </template>
+
+  <script src="/js/wristband.js?v=2"></script>
+</body>
+</html>

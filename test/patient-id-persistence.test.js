@@ -180,6 +180,14 @@ test('Patient IDs and wristband backend remain correct across restart', { timeou
       `/api/wristbands/lookup/${first.patient_ref}`);
     assert.equal(unauthorized.response.status, 401);
 
+    // The standalone page is a data-free shell; patient data still requires
+    // the authenticated API above.
+    const printPage = await fetch(`${server.baseUrl}/wristband.html?patient=${first.id}`);
+    assert.equal(printPage.status, 200);
+    const printHtml = await printPage.text();
+    assert.doesNotMatch(printHtml, new RegExp(first.patient_ref));
+    assert.doesNotMatch(printHtml, /Persistence Patient 0/);
+
     // Exact lookup accepts both new CLQ IDs and existing PAT IDs.
     const lookup = await request(server, 'GET',
       `/api/wristbands/lookup/${first.patient_ref.toLowerCase()}`, undefined, cookie);
