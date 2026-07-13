@@ -136,8 +136,9 @@ router.get('/patients/:id/barcode/:format', async (req, res, next) => {
     const options = req.params.format === 'code128'
       ? {
           bcid: 'code128', text: patient.patient_ref,
-          scale: 3, height: 14, includetext: false,
-          paddingwidth: 4, paddingheight: 2,
+          scale: 4, height: 14, includetext: false,
+          paddingwidth: 10, paddingheight: 2,
+          rotate: 'N', barcolor: '000000', backgroundcolor: 'FFFFFF',
         }
       : {
           bcid: 'qrcode', text: patient.patient_ref,

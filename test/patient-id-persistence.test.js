@@ -8,6 +8,7 @@ const path = require('node:path');
 const net = require('node:net');
 const { spawn } = require('node:child_process');
 const sqlite3 = require('sqlite3').verbose();
+const bwipjs = require('bwip-js');
 
 const ROOT = path.join(__dirname, '..');
 const SERVER = path.join(ROOT, 'server.js');
@@ -225,7 +226,7 @@ test('Patient IDs and wristband backend remain correct across restart', { timeou
       assert.equal(Object.hasOwn(safePayload.data, forbidden), false, `${forbidden} must not be exposed`);
     }
 
-    // Both SVG variants are generated locally from the same Patient ID.
+    // Both SVG variants are generated locally from the same exact Patient ID.
     for (const format of ['code128', 'qr']) {
       const barcode = await fetch(
         `${server.baseUrl}/api/wristbands/patients/${first.id}/barcode/${format}`,
@@ -233,7 +234,23 @@ test('Patient IDs and wristband backend remain correct across restart', { timeou
       );
       assert.equal(barcode.status, 200);
       assert.match(barcode.headers.get('content-type'), /^image\/svg\+xml/);
-      assert.match(await barcode.text(), /<svg[\s>]/);
+      const svg = await barcode.text();
+      assert.match(svg, /<svg[\s>]/);
+      if (format === 'code128') {
+        const expected = bwipjs.toSVG({
+          bcid: 'code128', text: first.patient_ref,
+          scale: 4, height: 14, includetext: false,
+          paddingwidth: 10, paddingheight: 2,
+          rotate: 'N', barcolor: '000000', backgroundcolor: 'FFFFFF',
+        });
+        assert.equal(svg, expected, 'Code 128 must encode the exact permanent Patient ID');
+        assert.match(svg, /viewBox="0 0 792 176"/);
+        assert.match(svg, /<rect width="100%" height="100%" fill="#FFFFFF"/);
+        assert.match(svg, /stroke="#000000"/);
+        assert.doesNotMatch(svg, /<text[\s>]/);
+        assert.match(svg, /stroke-width="8" d="M44 /,
+          'the first narrow bar must start after a ten-module left quiet zone');
+      }
     }
     const badBarcode = await request(server, 'GET',
       `/api/wristbands/patients/${first.id}/barcode/pdf417`, undefined, cookie);

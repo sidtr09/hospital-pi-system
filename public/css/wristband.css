@@ -125,6 +125,12 @@ body {
   font: inherit;
 }
 .preview-options span, .print-count, .privacy-note { color: var(--muted); }
+.print-scale-notice {
+  margin: 0 0 10px;
+  color: #854d0e;
+  font-size: 12px;
+  font-weight: 750;
+}
 .print-count { margin-bottom: 18px; font-size: 12px; }
 .privacy-note { margin-top: 18px; font-size: 12px; text-align: center; }
 
@@ -138,7 +144,7 @@ body {
 }
 
 .cut-instruction {
-  width: 7.75in;
+  width: 6.2in;
   margin: 0 auto 10px;
   color: var(--muted);
   font-size: 10px;
@@ -149,22 +155,22 @@ body {
 
 .labels-grid {
   display: grid;
-  grid-template-columns: repeat(2, 3.75in);
-  gap: .25in;
-  width: 7.75in;
+  grid-template-columns: repeat(2, 3in);
+  gap: .2in;
+  width: 6.2in;
   margin: 0 auto;
 }
 
-.labels-grid.single-copy { grid-template-columns: 3.75in; width: 3.75in; }
+.labels-grid.single-copy { grid-template-columns: 3in; width: 3in; }
 
 .barcode-label {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) .68in;
-  gap: .08in;
-  width: 3.75in;
-  height: 1.15in;
-  padding: .08in;
-  border: 1.5px dashed #333;
+  grid-template-columns: minmax(0, 1fr) .54in;
+  gap: .03in;
+  width: 3in;
+  height: .9in;
+  padding: .035in;
+  border: 1.25px dashed #333;
   background: #fff;
   color: #000;
   break-inside: avoid;
@@ -172,14 +178,13 @@ body {
 }
 
 .label-main { display: flex; min-width: 0; flex-direction: column; justify-content: center; }
-.label-heading { display: flex; align-items: baseline; justify-content: space-between; gap: .08in; }
-.label-brand { flex-shrink: 0; font-size: .11in; font-weight: 850; }
-.label-brand span { display: inline-grid; width: .14in; height: .14in; place-items: center; border: 1.5px solid #111; border-radius: 50%; font-size: .1in; line-height: 1; }
-.label-patient-ref { overflow: hidden; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .145in; font-weight: 900; letter-spacing: .015em; text-overflow: ellipsis; white-space: nowrap; }
-.primary-caption, .backup-caption { margin-top: .02in; font-size: .055in; font-weight: 850; letter-spacing: .08em; }
-.primary-caption { text-align: center; }
-.backup-caption { text-align: center; }
-.code128-image { display: block; width: 2.78in; height: .66in; object-fit: fill; }
+.label-heading { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: baseline; gap: .06in; }
+.label-brand { flex-shrink: 0; font-size: .09in; font-weight: 850; }
+.label-brand span { display: inline-grid; width: .115in; height: .115in; place-items: center; border: 1.25px solid #111; border-radius: 50%; font-size: .08in; line-height: 1; }
+.label-patient-ref { overflow: hidden; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .13in; font-weight: 900; letter-spacing: .012em; text-align: center; text-overflow: ellipsis; white-space: nowrap; }
+.primary-caption, .backup-caption { margin-top: .005in; font-size: .04in; font-weight: 850; letter-spacing: .06em; }
+.primary-caption, .backup-caption { text-align: center; }
+.code128-image { display: block; width: 100%; height: auto; object-fit: contain; object-position: center; background: #fff; }
 
 .label-qr {
   display: flex;
@@ -188,10 +193,11 @@ body {
   justify-content: center;
   flex-direction: column;
   border-left: 1px solid #777;
-  padding-left: .06in;
+  padding: .015in 0 .015in .04in;
+  background: #fff;
 }
 
-.qr-image { display: block; width: .58in; height: .58in; object-fit: contain; }
+.qr-image { display: block; width: .48in; height: .48in; aspect-ratio: 1 / 1; object-fit: contain; background: #fff; }
 .barcode-error { color: #8f1b13; font-size: .065in; font-weight: 750; text-align: center; }
 
 @media (max-width: 760px) {

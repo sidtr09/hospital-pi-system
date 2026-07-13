@@ -626,13 +626,13 @@ function closeModal() {
 
 // The standalone page receives only the internal numeric row ID. It retrieves
 // all printable fields through the authenticated wristband API.
-function openWristbandPage(patientId) {
+function openWristbandLabel(patientId) {
   const id = Number(patientId);
   if (!Number.isSafeInteger(id) || id < 1) {
     toast('Invalid patient record', 'error');
     return;
   }
-  const opened = window.open(`/wristband.html?patient=${id}`, '_blank');
+  const opened = window.open(`/wristband.html?patient=${encodeURIComponent(String(id))}`, '_blank');
   if (opened) opened.opener = null;
   else toast('Allow pop-ups to preview the wristband', 'warning');
 }
@@ -1923,7 +1923,7 @@ window.viewPatient = async (id) => {
     };
     $('pv-notes').onclick = () => { closeModal(); viewNotes(id, p.full_name); };
     if ($('pv-edit')) $('pv-edit').onclick = () => { closeModal(); editPatient(id); };
-    $('pv-wristband').onclick = () => openWristbandPage(id);
+    $('pv-wristband').onclick = () => openWristbandLabel(id);
   } catch (e) {
     setHTML('modal-body', `<div class="alert alert-error">${escapeHtml(e.message)}</div>`);
   }
@@ -2498,7 +2498,7 @@ PAGES['patient-register'] = (el) => {
       </div>`;
 
     $('reg-view-patient').onclick = () => viewPatient(created.id);
-    $('reg-print-wristband').onclick = () => openWristbandPage(created.id);
+    $('reg-print-wristband').onclick = () => openWristbandLabel(created.id);
     $('reg-another').onclick = () => navigate('patient-register');
     $('reg-triage-now').onclick = () => showEnqueueModal(
       () => navigate('triage-queue'),

@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Wristband Label — Cliniq</title>
-  <link rel="stylesheet" href="/css/wristband.css?v=2">
+  <link rel="stylesheet" href="/css/wristband.css?v=6">
 </head>
 <body>
   <main class="page-shell">
@@ -39,6 +39,8 @@
         <span>Multiple copies count as one print request.</span>
       </div>
 
+      <p class="print-scale-notice no-print">Print at 100% or Actual Size. Do not use Fit to Page. Turn off browser headers and footers.</p>
+
       <div class="print-count no-print">
         Recorded print requests: <strong id="print-count">0</strong>.
         Opening this preview does not record a request.
@@ -62,18 +64,18 @@
           <span class="label-brand"><span aria-hidden="true">+</span> Cliniq</span>
           <span class="label-patient-ref">—</span>
         </div>
-        <div class="primary-caption">PRIMARY · CODE 128</div>
+        <div class="primary-caption">CODE 128</div>
         <img class="code128-image" alt="Code 128 permanent Patient ID barcode">
         <div class="barcode-error code128-error hidden">Code 128 barcode unavailable</div>
       </div>
       <div class="label-qr">
-        <div class="backup-caption">BACKUP</div>
+        <div class="backup-caption">PRIMARY SCAN</div>
         <img class="qr-image" alt="Backup QR permanent Patient ID barcode">
         <div class="barcode-error qr-error hidden">QR unavailable</div>
       </div>
     </article>
   </template>
 
-  <script src="/js/wristband.js?v=2"></script>
+  <script src="/js/wristband.js?v=4"></script>
 </body>
 </html>
