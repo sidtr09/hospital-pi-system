@@ -3,27 +3,33 @@
 const express = require('express');
 const db      = require('../database/db');
 
-// ── Fire-and-forget event logger — used from every other route ─────────────
+// Strict writer for workflows where the state change and its audit entry must
+// either both commit or both roll back (for example wristband print tracking).
+async function writeEvent(req, action, opts = {}) {
+  await db.run(
+    `INSERT INTO audit_log
+       (actor_username, actor_name, actor_role, action,
+        target_kind, target_id, detail, ip, user_agent)
+     VALUES (?,?,?,?,?,?,?,?,?)`,
+    [
+      req.session?.userUsername || null,
+      req.session?.userName     || null,
+      req.session?.userRole     || null,
+      action,
+      opts.target_kind || null,
+      opts.target_id != null ? String(opts.target_id) : null,
+      opts.detail ? JSON.stringify(opts.detail) : null,
+      req.ip || req.connection?.remoteAddress || null,
+      (req.get && req.get('user-agent')) || null,
+    ]
+  );
+}
+
+// Best-effort logger used by existing routes. Audit failures must not break
+// unrelated clinical work that historically used this helper.
 async function logEvent(req, action, opts = {}) {
-  try {
-    await db.run(
-      `INSERT INTO audit_log
-         (actor_username, actor_name, actor_role, action,
-          target_kind, target_id, detail, ip, user_agent)
-       VALUES (?,?,?,?,?,?,?,?,?)`,
-      [
-        req.session?.userUsername || null,
-        req.session?.userName     || null,
-        req.session?.userRole     || null,
-        action,
-        opts.target_kind || null,
-        opts.target_id != null ? String(opts.target_id) : null,
-        opts.detail ? JSON.stringify(opts.detail) : null,
-        req.ip || req.connection?.remoteAddress || null,
-        (req.get && req.get('user-agent')) || null,
-      ]
-    );
-  } catch { /* swallow — audit must never break the caller */ }
+  try { await writeEvent(req, action, opts); }
+  catch { /* preserve existing fire-and-forget behavior */ }
 }
 
 // ── Admin-only read/export endpoints ──────────────────────────────────────
@@ -83,3 +89,4 @@ router.get('/export', requireAdmin, async (req, res, next) => {
 
 module.exports = router;
 module.exports.logEvent = logEvent;
+module.exports.writeEvent = writeEvent;

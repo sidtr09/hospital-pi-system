@@ -142,7 +142,7 @@ async function login(instance) {
   return response.headers.get('set-cookie').split(';', 1)[0];
 }
 
-test('server-generated Patient IDs are unique and persist across restart', { timeout: 30000 }, async () => {
+test('Patient IDs and wristband backend remain correct across restart', { timeout: 30000 }, async () => {
   const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'cliniq-stage1-'));
   const dbPath = path.join(tempDir, 'hospital.db');
   let server;
@@ -159,6 +159,9 @@ test('server-generated Patient IDs are unique and persist across restart', { tim
         full_name: `Persistence Patient ${index}`,
         date_of_birth: `199${index}-01-02`,
         sex: index % 2 ? 'F' : 'M',
+        contact_number: index === 0 ? '555-0100' : '',
+        address: index === 0 ? 'Private test address' : '',
+        allergy_notes: index === 0 ? 'Penicillin' : '',
       }, cookie)
     ));
 
@@ -172,6 +175,68 @@ test('server-generated Patient IDs are unique and persist across restart', { tim
     assert.equal(new Set(refs).size, refs.length, 'every generated Patient ID must be unique');
     const first = registrations[0].data;
 
+    // Every wristband endpoint is authenticated.
+    const unauthorized = await request(server, 'GET',
+      `/api/wristbands/lookup/${first.patient_ref}`);
+    assert.equal(unauthorized.response.status, 401);
+
+    // Exact lookup accepts both new CLQ IDs and existing PAT IDs.
+    const lookup = await request(server, 'GET',
+      `/api/wristbands/lookup/${first.patient_ref.toLowerCase()}`, undefined, cookie);
+    assert.equal(lookup.response.status, 200, JSON.stringify(lookup.data));
+    assert.equal(lookup.data.id, first.id);
+    assert.equal(lookup.data.patient_ref, first.patient_ref);
+
+    const legacyLookup = await request(server, 'GET',
+      '/api/wristbands/lookup/pat-2025-0042', undefined, cookie);
+    assert.equal(legacyLookup.response.status, 200, JSON.stringify(legacyLookup.data));
+    assert.equal(legacyLookup.data.patient_ref, 'PAT-2025-0042');
+
+    const invalidLookup = await request(server, 'GET',
+      '/api/wristbands/lookup/CLQ-%25-INVALID', undefined, cookie);
+    assert.equal(invalidLookup.response.status, 400);
+
+    // The print payload intentionally excludes contact/address/clinical data.
+    const safePayload = await request(server, 'GET',
+      `/api/wristbands/patients/${first.id}`, undefined, cookie);
+    assert.equal(safePayload.response.status, 200, JSON.stringify(safePayload.data));
+    assert.equal(safePayload.data.patient_ref, first.patient_ref);
+    assert.equal(safePayload.data.allergy_notes, 'Penicillin');
+    assert.equal(safePayload.data.wristband.print_count, 0);
+    assert.equal(safePayload.data.triage, null);
+    for (const forbidden of ['contact_number', 'address', 'emergency_contact', 'medical_history']) {
+      assert.equal(Object.hasOwn(safePayload.data, forbidden), false, `${forbidden} must not be exposed`);
+    }
+
+    // Both SVG variants are generated locally from the same Patient ID.
+    for (const format of ['code128', 'qr']) {
+      const barcode = await fetch(
+        `${server.baseUrl}/api/wristbands/patients/${first.id}/barcode/${format}`,
+        { headers: { cookie } }
+      );
+      assert.equal(barcode.status, 200);
+      assert.match(barcode.headers.get('content-type'), /^image\/svg\+xml/);
+      assert.match(await barcode.text(), /<svg[\s>]/);
+    }
+    const badBarcode = await request(server, 'GET',
+      `/api/wristbands/patients/${first.id}/barcode/pdf417`, undefined, cookie);
+    assert.equal(badBarcode.response.status, 400);
+
+    // First print request and scanner resolution are persisted before restart.
+    const firstPrint = await request(server, 'POST',
+      `/api/wristbands/patients/${first.id}/print-requests`, {}, cookie);
+    assert.equal(firstPrint.response.status, 201, JSON.stringify(firstPrint.data));
+    assert.equal(firstPrint.data.action, 'wristband.print');
+    assert.equal(firstPrint.data.print_count, 1);
+
+    const scan = await request(server, 'POST', '/api/wristbands/scan',
+      { patient_ref: first.patient_ref }, cookie);
+    assert.equal(scan.response.status, 200, JSON.stringify(scan.data));
+    assert.equal(scan.data.id, first.id);
+    const missingScan = await request(server, 'POST', '/api/wristbands/scan',
+      { patient_ref: 'CLQ-2099-999999' }, cookie);
+    assert.equal(missingScan.response.status, 404);
+
     await stopServer(server);
     server = await startServer(dbPath);
     assert.match(server.output(), /\[DB\] Patient count: 9/);
@@ -181,6 +246,27 @@ test('server-generated Patient IDs are unique and persist across restart', { tim
     assert.equal(persisted.response.status, 200, JSON.stringify(persisted.data));
     assert.equal(persisted.data.patient_ref, first.patient_ref);
     assert.equal(persisted.data.full_name, 'Persistence Patient 0');
+
+    const trackingAfterRestart = await request(server, 'GET',
+      `/api/wristbands/patients/${first.id}`, undefined, cookie);
+    assert.equal(trackingAfterRestart.data.wristband.print_count, 1);
+
+    const reprint = await request(server, 'POST',
+      `/api/wristbands/patients/${first.id}/print-requests`, {}, cookie);
+    assert.equal(reprint.response.status, 201, JSON.stringify(reprint.data));
+    assert.equal(reprint.data.action, 'wristband.reprint');
+    assert.equal(reprint.data.print_count, 2);
+
+    for (const [action, expected] of [
+      ['wristband.print', 1],
+      ['wristband.reprint', 1],
+      ['wristband.scan', 2],
+    ]) {
+      const audit = await request(server, 'GET',
+        `/api/audit?action=${encodeURIComponent(action)}&limit=20`, undefined, cookie);
+      assert.equal(audit.response.status, 200, JSON.stringify(audit.data));
+      assert.equal(audit.data.count, expected, `${action} audit events must survive restart`);
+    }
 
     const legacy = await request(server, 'GET', '/api/patients?q=PAT-2025-0042&limit=5', undefined, cookie);
     assert.equal(legacy.response.status, 200, JSON.stringify(legacy.data));

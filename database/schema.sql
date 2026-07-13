@@ -173,6 +173,19 @@ CREATE INDEX IF NOT EXISTS idx_audit_occurred ON audit_log(occurred_at DESC);
 CREATE INDEX IF NOT EXISTS idx_audit_actor    ON audit_log(actor_username);
 CREATE INDEX IF NOT EXISTS idx_audit_action   ON audit_log(action);
 
+-- ── Patient Wristband Print Tracking ───────────────────────────────────────
+-- Barcode images are deterministic from patients.patient_ref and are not
+-- stored. This row only distinguishes the first print request from reprints.
+
+CREATE TABLE IF NOT EXISTS patient_wristbands (
+    patient_id                  INTEGER PRIMARY KEY
+                                    REFERENCES patients(id) ON DELETE CASCADE,
+    print_count                 INTEGER NOT NULL DEFAULT 0 CHECK(print_count >= 0),
+    first_print_requested_at    TEXT,
+    last_print_requested_at     TEXT,
+    last_requested_by           TEXT
+);
+
 -- ── System Settings (key/value store for disaster mode etc) ────────────────
 
 CREATE TABLE IF NOT EXISTS app_settings (
