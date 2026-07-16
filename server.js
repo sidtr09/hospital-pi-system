@@ -91,6 +91,11 @@ app.use(express.static(path.join(__dirname, 'public'), {
   maxAge: appConfig.staticCacheMaxAge,
   etag: true,
   lastModified: true,
+  setHeaders: (res, filePath) => {
+    if (path.basename(filePath) === 'index.html') {
+      res.setHeader('Cache-Control', 'no-cache, must-revalidate');
+    }
+  },
 }));
 
 // Serve the pinned npm browser bundle locally. Cliniq never loads scanner code
@@ -143,6 +148,7 @@ app.get('/api/health', (req, res) => {
 
 // ── SPA fallback — serves [ Navigation Bar Component ] shell for all views ───
 app.get('*', (req, res) => {
+  res.setHeader('Cache-Control', 'no-cache, must-revalidate');
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
