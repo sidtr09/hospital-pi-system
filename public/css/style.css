@@ -1354,6 +1354,17 @@ input[type="time"]:focus {
   .card-body { padding: 14px; }
   .stat-grid, .stat-tiles, .grid-4 { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
   .stat, .stat-tile { min-width: 0; padding: 13px; }
+  .stat-tiles[style] { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
+  .stat-tile {
+    display: grid; grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-rows: auto 1fr; align-items: start; column-gap: 8px;
+  }
+  .stat-tile .lbl { min-width: 0; overflow-wrap: anywhere; }
+  .stat-tile .ring {
+    position: static; grid-column: 2; grid-row: 1;
+    width: 20px; height: 20px; border-width: 3px;
+  }
+  .stat-tile .num { grid-column: 1 / -1; align-self: end; }
   .tasks-band, .doc-grid { grid-template-columns: 1fr; }
   .two-col, .three-col, .col-6040, .col-4060, .grid-7030 { grid-template-columns: minmax(0, 1fr); gap: 14px; }
   .donut-wrap { align-items: flex-start; flex-wrap: wrap; }
@@ -1430,9 +1441,13 @@ input[type="time"]:focus {
   .navbar-brand { font-size: 19px; }
   .notif-btn, .privacy-btn, .menu-btn { width: 42px; height: 42px; flex-basis: 42px; }
   .main { padding-inline: 8px; }
-  .stat-grid, .stat-tiles, .grid-4 { grid-template-columns: 1fr; }
+  .stat-grid, .stat-tiles, .stat-tiles[style], .grid-4 { grid-template-columns: 1fr !important; }
   .table-wrap tbody { padding: 8px; }
   .table-wrap td { grid-template-columns: minmax(76px, 32%) minmax(0, 1fr); padding-inline: 10px; }
+}
+
+@media screen and (min-width: 600px) and (max-width: 768px) {
+  .stat-tiles[style] { grid-template-columns: repeat(3, minmax(0, 1fr)) !important; }
 }
 
 @media screen and (orientation: landscape) and (max-height: 520px) {
