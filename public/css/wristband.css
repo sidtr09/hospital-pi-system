@@ -200,13 +200,15 @@ body {
 .qr-image { display: block; width: .48in; height: .48in; aspect-ratio: 1 / 1; object-fit: contain; background: #fff; }
 .barcode-error { color: #8f1b13; font-size: .065in; font-weight: 750; text-align: center; }
 
-@media (max-width: 760px) {
+@media screen and (max-width: 760px) {
   .page-shell { padding: 20px 12px; }
   .preview-header { align-items: stretch; flex-direction: column; }
   .preview-actions { width: 100%; }
   .preview-actions .button { flex: 1; }
+  .button { min-height: 44px; }
   .preview-options { align-items: flex-start; flex-wrap: wrap; }
   .print-sheet { padding-inline: 12px; }
+  .state-card { width: calc(100vw - 24px); margin-top: 5vh; padding: 28px 20px; }
 }
 
 @page {
