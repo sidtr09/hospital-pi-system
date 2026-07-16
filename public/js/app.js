@@ -618,9 +618,14 @@ function openModal(title, html) {
   $('modal-title').textContent = title;
   $('modal-body').innerHTML = html;
   $('modal-overlay').classList.add('open');
+  $('modal-overlay').setAttribute('aria-hidden', 'false');
+  document.body.classList.add('modal-open');
+  $('modal-close').focus();
 }
 function closeModal() {
   $('modal-overlay').classList.remove('open');
+  $('modal-overlay').setAttribute('aria-hidden', 'true');
+  document.body.classList.remove('modal-open');
   document.querySelector('.modal')?.classList.remove('wide');
 }
 
@@ -637,9 +642,8 @@ function openWristbandLabel(patientId) {
   else toast('Allow pop-ups to preview the wristband', 'warning');
 }
 $('modal-close').onclick = closeModal;
-$('modal-overlay').onclick = e => { if (e.target === $('modal-overlay')) closeModal(); };
 document.addEventListener('keydown', e => {
-  if (e.key === 'Escape') closeModal();
+  if (e.key === 'Escape' && $('modal-overlay').classList.contains('open')) closeModal();
   if (e.key === '/' && $('app').style.display === 'block' &&
       document.activeElement.tagName !== 'INPUT' && document.activeElement.tagName !== 'TEXTAREA') {
     e.preventDefault(); $('global-search-input').focus();
@@ -657,11 +661,47 @@ function buildSidebar(role) {
     : `<div class="nav-item" data-page="${it.page}">
          ${icon(it.icon, 16, it.tone || null)}<span class="nav-label">${escapeHtml(it.label)}</span>
        </div>`
-  ).join('');
+  ).join('') + `<div class="mobile-account-actions">
+    <div class="nav-section">Account</div>
+    <button class="mobile-logout-btn" id="mobile-logout-btn" type="button">Sign out</button>
+  </div>`;
   $('sidebar').querySelectorAll('.nav-item').forEach(el => {
-    el.onclick = () => navigate(el.dataset.page);
+    el.setAttribute('role', 'button');
+    el.setAttribute('tabindex', '0');
+    el.onclick = () => { navigate(el.dataset.page); closeMobileMenu(); };
+    el.onkeydown = e => {
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); el.click(); }
+    };
+  });
+  $('mobile-logout-btn').onclick = () => $('logout-btn').click();
+}
+
+function setMobileMenu(open) {
+  document.body.classList.toggle('mobile-menu-open', open);
+  $('menu-btn').setAttribute('aria-expanded', String(open));
+  $('menu-btn').setAttribute('aria-label', open ? 'Close navigation menu' : 'Open navigation menu');
+}
+function closeMobileMenu() { setMobileMenu(false); }
+$('menu-btn').onclick = () => setMobileMenu(!$('menu-btn').getAttribute('aria-expanded').includes('true'));
+$('sidebar-backdrop').onclick = closeMobileMenu;
+window.addEventListener('resize', () => { if (window.innerWidth > 768) closeMobileMenu(); });
+
+// On narrow screens, existing semantic tables become stacked records. Labels
+// are derived from their own headers so every dynamically-rendered table works
+// without duplicating patient data or changing desktop markup.
+function labelResponsiveTables(root = document) {
+  const tables = [...root.querySelectorAll?.('.table-wrap table') || []];
+  if (root.matches?.('.table-wrap table')) tables.unshift(root);
+  tables.forEach(table => {
+    const labels = [...table.querySelectorAll('thead th')].map(th => th.textContent.trim() || 'Actions');
+    table.querySelectorAll('tbody tr').forEach(row => {
+      [...row.children].forEach((cell, index) => cell.dataset.label = labels[index] || 'Details');
+    });
   });
 }
+new MutationObserver(records => records.forEach(record => record.addedNodes.forEach(node => {
+  if (node.nodeType === Node.ELEMENT_NODE) labelResponsiveTables(node);
+}))).observe(document.body, { childList: true, subtree: true });
 
 /* ════════════════════════════════════════════════════════════════
    NAVIGATION
@@ -681,6 +721,7 @@ function navigate(page) {
   const fn = PAGES[page];
   if (fn) fn($('main-content'));
   else $('main-content').innerHTML = `<div class="empty"><div class="icon">${icon('alert', 36, 'orange')}</div><p>${escapeHtml(page)} — coming soon</p></div>`;
+  requestAnimationFrame(() => labelResponsiveTables($('main-content')));
 }
 
 /* ════════════════════════════════════════════════════════════════
@@ -821,6 +862,7 @@ function setupPrivacy() {
   const paint = () => {
     const on = isPrivacyOn();
     btn.title = on ? 'Show sensitive details' : 'Hide sensitive details';
+    btn.setAttribute('aria-label', btn.title);
     icoEl.innerHTML = on
       ? '<path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/>'
       : '<path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>';
