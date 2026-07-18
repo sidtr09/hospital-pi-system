@@ -206,6 +206,56 @@ http://192.168.1.100:3000/api/health
 
 Returns server uptime, RAM usage, and database connection status — useful for monitoring the Pi without SSH.
 
+## Optional local Typesense patient search
+
+SQLite remains Cliniq's authoritative patient database. Typesense is an
+optional, self-hosted index for typo-tolerant searches by permanent Patient ID
+or patient name. If it is unconfigured, offline, or too slow, the existing
+SQLite search is used automatically. Registration always commits to SQLite
+before best-effort indexing.
+
+Install a native `typesense-server` binary for macOS or Linux ARM64, then run it
+locally (no Docker or cloud account is required):
+
+```bash
+mkdir -p ./typesense-data
+typesense-server \
+  --data-dir=./typesense-data \
+  --api-key=replace-with-a-long-local-admin-key \
+  --api-port=8108
+```
+
+In another terminal, export the optional settings and start Cliniq. The project
+does not automatically load `.env`; `.env.example` is a safe reference for
+shell or systemd configuration.
+
+```bash
+export TYPESENSE_HOST=127.0.0.1
+export TYPESENSE_PORT=8108
+export TYPESENSE_PROTOCOL=http
+export TYPESENSE_API_KEY=replace-with-a-long-local-admin-key
+export TYPESENSE_COLLECTION=cliniq_patients
+npm start
+```
+
+After signing in as an Administrator, idempotently synchronize existing SQLite
+patients into the index:
+
+```bash
+curl -c /tmp/cliniq-cookie.txt \
+  -H 'Content-Type: application/json' \
+  -d '{"username":"admin","password":"your-password"}' \
+  http://127.0.0.1:3000/api/auth/login
+
+curl -b /tmp/cliniq-cookie.txt \
+  -X POST \
+  http://127.0.0.1:3000/api/patients/search-index/sync
+```
+
+The index contains only `patient_ref` and `full_name`. Administrative keys are
+used only by Express and are never sent to browser JavaScript. On Raspberry Pi,
+use the vendor's ARM64 server binary with the same command and environment.
+
 ---
 
 ## Offline Operation

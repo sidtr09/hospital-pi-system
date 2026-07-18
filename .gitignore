@@ -5,5 +5,10 @@ database/hospital.db-wal
 backup/hospital_backup_*.db
 logs/
 data/
+typesense-data/
 .env
+.env.*
+!.env.example
 .DS_Store
+typesense-server
+typesense-server-*.tar.gz

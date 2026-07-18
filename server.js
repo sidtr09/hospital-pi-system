@@ -30,6 +30,8 @@ const settingsRoutes = require('./routes/settings.routes');
 const systemRoutes   = require('./routes/system.routes');
 const wristbandRoutes = require('./routes/wristband.routes');
 const sessionMiddleware = require('./middleware/session.middleware');
+const patientSearch = require('./services/typesense-patient-search');
+const patientMutationLock = require('./services/patient-mutation-lock');
 
 const app = express();
 let httpServer = null;
@@ -168,6 +170,20 @@ async function bootstrap() {
   await db.initialize();
   const patientCount = await db.get('SELECT COUNT(*) AS count FROM patients');
   console.log(`[DB] Patient count: ${patientCount?.count ?? 0}`);
+  const searchStatus = await patientSearch.initializeCollection();
+  if (!searchStatus.enabled) console.log('[Typesense] Disabled; SQLite patient search active');
+  else if (searchStatus.ready) {
+    try {
+      const syncStatus = await patientMutationLock.runExclusive(async () => {
+        const patients = await db.all('SELECT patient_ref, full_name FROM patients ORDER BY id ASC');
+        return patientSearch.synchronize(patients);
+      });
+      if (syncStatus.ready) console.log('[Typesense] Patient search index reconciled and ready');
+      else console.warn('[Typesense] Patient reconciliation incomplete; SQLite search active');
+    } catch {
+      console.warn('[Typesense] Patient reconciliation unavailable; SQLite search active');
+    }
+  }
 
   httpServer = app.listen(appConfig.port, appConfig.host, () => {
     console.log(`Cliniq running on http://${appConfig.host}:${appConfig.port}`);
